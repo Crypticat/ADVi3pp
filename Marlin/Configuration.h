@@ -1273,7 +1273,7 @@ namespace ADVi3pp {
  * Override with M203
  *                                      X, Y, Z [, I [, J [, K...]]], E0 [, E1[, E2...]]
  */
-// @advi3++: Set reasonable default values for Wanhao i3 Plus 
+// @advi3++: Set reasonable default values for Wanhao i3 Plus
 #define DEFAULT_MAX_FEEDRATE          { 450, 450, 10, 25 }
 
 //#define LIMITED_MAX_FR_EDITING        // Limit edit via M203 or LCD to DEFAULT_MAX_FEEDRATE * 2
@@ -1303,7 +1303,7 @@ namespace ADVi3pp {
  *   M204 R    Retract Acceleration
  *   M204 T    Travel Acceleration
  */
-// @advi3++: Set reasonable default values for Wanhao i3 Plus 
+// @advi3++: Set reasonable default values for Wanhao i3 Plus
 #define DEFAULT_ACCELERATION          800    // X, Y, Z and E acceleration for printing moves
 #define DEFAULT_RETRACT_ACCELERATION  800    // E acceleration for retracts
 #define DEFAULT_TRAVEL_ACCELERATION   800    // X, Y, Z acceleration for travel (non printing) moves
@@ -1821,7 +1821,7 @@ namespace ADVi3pp {
 // @section geometry
 
 // The size of the printable area
-#define X_BED_SIZE 200
+#define X_BED_SIZE 170
 #define Y_BED_SIZE 200
 
 // Travel limits (linear=mm, rotational=°) after homing, corresponding to endstop positions.
@@ -2406,7 +2406,7 @@ namespace ADVi3pp {
  *    P0  (Default) If Z is below park Z raise the nozzle.
  *    P1  Raise the nozzle always to Z-park height.
  *    P2  Raise the nozzle by Z-park amount, limited to Z_MAX_POS.
- */ 
+ */
 // @advi3++: Enable nozzle parking
 #define NOZZLE_PARK_FEATURE
 // @advi3++: Do not park in case of hardware error
