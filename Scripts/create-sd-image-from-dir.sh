@@ -1,9 +1,8 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 : '
 Create a microSD disk image from a source directory.
 '
 
-if [[ "$OSTYPE" != "darwin"* ]]; then echo "Work only on macOS, sorry" ; exit 1; fi
 if [[ $# -ne 4 ]] ; then echo "Invalid number of arguments" ; exit 1; fi
 
 folder=$1
@@ -11,10 +10,10 @@ label=$2
 imgname=$3
 compress=$4
 
-. ./version.sh
-
 scripts="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 ret=$?; if [[ $ret != 0 ]]; then exit $ret; fi
+
+. "${scripts}/version.sh"
 
 dgusroot="$( cd "${scripts}/../LCD-Panel/${folder}" && pwd )"
 ret=$?; if [[ $ret != 0 ]]; then exit $ret; fi
@@ -28,25 +27,29 @@ ret=$?; if [[ $ret != 0 ]]; then exit $ret; fi
 img="${release}/${imgname}-${version}.img"
 
 echo "Create microSD image..."
-dd if=/dev/zero bs=1m count=260 of="${img}"
+dd if=/dev/zero bs=1M count=260 of="${img}"
 
 echo "Format as FAT32 8 sectors per cluster..."
 mkfs.fat -F 32 -n "${label}" -s 8 -v "${img}"
 
 echo "Mount the SD image..."
-mount=$( sudo hdiutil attach -readwrite -imagekey diskimage-class=CRawDiskImage "${img}" | awk '{print $2}' )
-if [[ "${mount}" == "" ]]; then echo "Mounting failed" ; exit 1; fi
+mount_point=$(mktemp -d)
+if [[ -z "${mount_point}" ]]; then echo "Failed to create mount point" ; exit 1; fi
+
+sudo mount -o loop "${img}" "${mount_point}"
+ret=$?; if [[ $ret != 0 ]]; then echo "Mounting failed" ; rmdir "${mount_point}"; exit 1; fi
 
 echo "Copy files..."
-mkdir -p "${mount}/DWIN_SET/"
-cp -R -v "${dgusroot}/DWIN_SET/"* "${mount}/DWIN_SET/"
+sudo mkdir -p "${mount_point}/DWIN_SET/"
+sudo cp -R -v "${dgusroot}/DWIN_SET/"* "${mount_point}/DWIN_SET/"
 
 echo "Clean the files..."
-find "${mount}" -name '.DS_Store' -delete
-find "${mount}" -name '._*' -type f -delete
+sudo find "${mount_point}" -name '.DS_Store' -delete
+sudo find "${mount_point}" -name '._*' -type f -delete
 
-echo "Detach the SD image..."
-sudo hdiutil detach "${mount}"
+echo "Unmount the SD image..."
+sudo umount "${mount_point}"
+rmdir "${mount_point}"
 
 echo "Compress the SD image..."
 zip -j "${img}.zip" "${img}"
