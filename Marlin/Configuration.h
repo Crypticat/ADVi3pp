@@ -1442,7 +1442,7 @@ constexpr uint8_t DIMMING_BRIGHTNESS_DEFAULT = 5;
  *   M204 R    Retract Acceleration
  *   M204 T    Travel Acceleration
  */
-// @advi3++: Set reasonable default values for Wanhao i3 Plus 
+// @advi3++: Set reasonable default values for Wanhao i3 Plus
 #define DEFAULT_ACCELERATION          800    // X, Y, Z and E acceleration for printing moves
 #define DEFAULT_RETRACT_ACCELERATION  800    // E acceleration for retracts
 #define DEFAULT_TRAVEL_ACCELERATION   800    // X, Y, Z acceleration for travel (non printing) moves
@@ -2015,7 +2015,7 @@ constexpr uint8_t DIMMING_BRIGHTNESS_DEFAULT = 5;
 // @section geometry
 
 // The size of the printable area
-#define X_BED_SIZE 200
+#define X_BED_SIZE 170  // @advi3++: Reduced from 200 to match printer modifications
 #define Y_BED_SIZE 200
 
 // Travel limits (linear=mm, rotational=°) after homing, corresponding to endstop positions.

@@ -1788,11 +1788,11 @@
 
     #define POWER_LOSS_PIN         PL_PIN // Pin to detect power-loss. Set to -1 to disable default pin on boards without module, or comment to use board default. @advi3++
     #define POWER_LOSS_STATE         LOW  // State of pin indicating power-loss  @advi3++
-    #define POWER_LOSS_PULLUP             // Set pullup / pulldown as appropriate for your sensor  @advi3++ 
+    #define POWER_LOSS_PULLUP             // Set pullup / pulldown as appropriate for your sensor  @advi3++
     //#define POWER_LOSS_PULLDOWN
 
     #define POWER_LOSS_ZRAISE        2    // (mm) Z axis raise on resume (on power-loss with UPS) // @advi3++ on resume
-    #define POWER_LOSS_PURGE_LEN    20    // (mm) Length of filament to purge on resume  @advi3++ 
+    #define POWER_LOSS_PURGE_LEN    20    // (mm) Length of filament to purge on resume  @advi3++
 
     // Without a POWER_LOSS_PIN the following option helps reduce wear on the SD card,
     // especially with "vase mode" printing. Set too high and vases cannot be continued.
