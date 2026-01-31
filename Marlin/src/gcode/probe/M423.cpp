@@ -76,12 +76,12 @@ void GcodeSuite::M423() {
     do_report = false;
     const int8_t x = parser.value_int();
     if (!WITHIN(x, 0, XATC_MAX_POINTS - 1))
-      SERIAL_ECHOLNPGM(GCODE_ERR_MSG("(X) out of range (0..", XATC_MAX_POINTS - 1, ")."));
+      SERIAL_ECHOLNPGM("?(X) out of range (0..", XATC_MAX_POINTS - 1, ").");
     else {
       if (parser.seenval('Z'))
         xatc.z_offset[x] = parser.value_linear_units();
       else
-        SERIAL_ECHOLNPGM(GCODE_ERR_MSG("(Z) required."));
+        SERIAL_ECHOLNPGM("?(Z) required.");
     }
   }
 
@@ -90,8 +90,6 @@ void GcodeSuite::M423() {
 }
 
 void GcodeSuite::M423_report(const bool forReplay/*=true*/) {
-  TERN_(MARLIN_SMALL_BUILD, return);
-
   report_heading(forReplay, F("X-Twist Correction"));
   SERIAL_ECHOLNPGM("  M423 S", xatc.get_enabled());
   SERIAL_ECHOLNPGM("  M423 A", xatc.start, " I", xatc.spacing);

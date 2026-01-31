@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,15 +21,8 @@
 #include "../../../inc/MarlinConfig.h"
 #include "copyrights.h"
 
-namespace ADVi3pp::Copyrights {
+namespace ADVi3pp {
 
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: Pages::show(Page::Copyrights); break;
-      case KEY_CODE_BACK: Pages::back(Pages::BACK_OPTIONS::NONE); break;
-      default: return false;
-    }
-    return true;
-  }
+Copyrights copyrights;
 
 }

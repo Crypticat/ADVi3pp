@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,15 +21,46 @@
 #pragma once
 
 #include "../../lib/ADVstd/bitmasks.h"
-#include "../../core/pages.h"
-#include "../../../lcd/extui/ui_api.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::PidTuning {
-  enum struct RUNNING { NO, EXTRUDER, BED };
+namespace ADVi3pp {
 
-  bool handle_command(uint16_t key_code);
-  RUNNING is_running();
-  void on_start(bool bed);
+//! PID Tuning Page
+struct PidTuning: Screen<PidTuning> {
+  static constexpr Page PAGE = Page::PidTuning;
+  static constexpr Action ACTION = Action::PidTuning;
+
+  void on_start();
   void on_progress(int cycleIndex, int nbCycles);
-  void on_finished(ExtUI::pidresult_t result);
+  void on_finished(ExtUI::result_t result);
+  void send_data();
+
+private:
+  bool on_dispatch(KeyValue value);
+  bool on_enter();
+
+  void step2_command();
+  void step3_command();
+  void cancel_pid();
+  void hotend_command();
+  void bed_command();
+
+private:
+  enum class State: uint8_t {
+    None,
+    Processing,
+    FromLCDMenu = 0x80
+  };
+
+  uint16_t temperature_ = 0;
+  TemperatureKind kind_ = TemperatureKind::Hotend;
+  State state_ = State::None;
+
+  friend Parent;
+};
+
+ENABLE_BITMASK_OPERATOR(PidTuning::State);
+
+extern PidTuning pid_tuning;
+
 }

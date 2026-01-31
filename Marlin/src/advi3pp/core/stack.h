@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,59 +26,64 @@
 
 namespace ADVi3pp {
 
-  template<typename T, size_t S>
-  struct Stack {
-    void push(T e);
-    T pop();
-    [[nodiscard]] bool is_empty() const;
-    void empty();
-    [[nodiscard]] bool contains(T e) const;
-    [[nodiscard]] size_t size() const;
-    [[nodiscard]] const T& operator[](size_t i) const;
+template<typename T, size_t S>
+struct Stack {
+  void push(T e);
+  T pop();
+  bool is_empty() const;
+  void empty();
+  bool contains(T e) const;
+  void log(Log& l) const;
 
-  private:
-    adv::array<T, S> elements_;
-    size_t top_ = 0;
-  };
+private:
+  adv::array<T, S> elements_;
+  size_t top_ = 0;
+};
 
-  template<typename T, size_t S>
-  inline void Stack<T, S>::push(T e) {
-    assert(top_ < S);
-    elements_[top_++] = e;
-  }
+template<typename T, size_t S>
+inline Log& operator<<(Log& log, Stack<T, S> stack) {
+  stack.log(log);
+  return log;
+}
 
-  template<typename T, size_t S>
-  inline T Stack<T, S>::pop() {
-    assert(!is_empty());
-    return elements_[--top_];
-  }
+template<typename T, size_t S>
+inline void Stack<T, S>::push(T e) {
+  assert(top_ <= S);
+  elements_[top_++] = e;
+}
 
-  template<typename T, size_t S>
-  bool Stack<T, S>::is_empty() const {
-    return top_ == 0;
-  }
+template<typename T, size_t S>
+inline T Stack<T, S>::pop() {
+  assert(!is_empty());
+  return elements_[--top_];
+}
 
-  template<typename T, size_t S>
-  inline void Stack<T, S>::empty() {
-    top_ = 0;
-  }
+template<typename T, size_t S>
+bool Stack<T, S>::is_empty() const {
+  return top_ == 0;
+}
 
-  template<typename T, size_t S>
-  bool Stack<T, S>::contains(T e) const {
-    for(size_t i = 0; i < top_; ++i)
-      if(elements_[top_ - i - 1] == e)
-        return true;
-    return false;
-  }
+template<typename T, size_t S>
+inline void Stack<T, S>::empty() {
+  top_ = 0;
+}
 
-  template<typename T, size_t S>
-  size_t Stack<T, S>::size() const {
-    return top_;
-  }
+template<typename T, size_t S>
+bool Stack<T, S>::contains(T e) const {
+  for(size_t i = 0; i < top_; ++i)
+    if(elements_[top_ - i - 1] == e)
+      return true;
+  return false;
+}
 
-  template<typename T, size_t S>
-  const T& Stack<T, S>::operator[](size_t i) const {
-    return elements_[i];
-  }
+template<typename T, size_t S>
+void Stack<T, S>::log(Log& l) const {
+#ifdef ADVi3PP_DEBUG
+  if(is_empty())
+    l << F("<empty>");
+  for(size_t i = 0; i < top_; ++i)
+    l << elements_[i];
+#endif
+}
 
 }

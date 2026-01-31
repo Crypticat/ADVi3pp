@@ -55,19 +55,18 @@ void GcodeSuite::M300() {
 
   // @advi3++
   if(parser.seenval('D'))
-    ui.set_tone(duration, parser.ushortval('D', 0));
+    ui.set_tone(frequency, duration, parser.ushortval('D', 0));
   else
-    ui.buzz(duration, frequency);
+    ui.buzz_m300(duration, frequency);
 }
 
-// @advi3++
 void GcodeSuite::M300_report(const bool forReplay/*=true*/) {
   report_heading(forReplay, F("Play beep sound"));
   report_echo_start(forReplay);
   SERIAL_ECHOPGM("  M300");
   SERIAL_ECHOPGM(" P", ui.tone_duration);
-  SERIAL_ECHOPGM(" S", TONE_FREQUENCY_DEFAULT);
-  SERIAL_ECHOPGM(" D", ui.sound_on);
+  SERIAL_ECHOPGM(" S", ui.tone_frequency);
+  SERIAL_ECHOPGM(" D", ui.tone_options);
   SERIAL_EOL();
 }
 

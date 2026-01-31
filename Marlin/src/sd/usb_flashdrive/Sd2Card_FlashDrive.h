@@ -33,7 +33,7 @@
   /**
    * Define SOFTWARE_SPI to use bit-bang SPI
    */
-  #if ANY(MEGA_SOFT_SPI, SDFAT_USE_SOFTWARE_SPI)
+  #if ANY(MEGA_SOFT_SPI, USE_SOFTWARE_SPI)
     #define SOFTWARE_SPI
   #endif
 
@@ -47,8 +47,6 @@
   #endif
 #endif
 
-// @advi3++ Not used
-#if 0
 class DiskIODriver_USBFlash : public DiskIODriver {
   private:
     uint32_t pos;
@@ -80,5 +78,3 @@ class DiskIODriver_USBFlash : public DiskIODriver {
 
     void idle() override;
 };
-#endif
-

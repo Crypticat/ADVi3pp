@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,263 +22,164 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "../../inc/MarlinConfig.h"
 #include "../lib/ADVstd/array.h"
-#include "../lib/ADVstd/bitmasks.h"
 #include "flash_char.h"
-#include "enums.h"
 
-#ifndef ADVi3PP_LOG
-#define ADVi3PP_LOG 0
-#endif
 
 namespace ADVi3pp {
 
-  struct SuspendLogging {
-    SuspendLogging() { suspend(); }
-    ~SuspendLogging() { resume(); }
+enum class LogState { Start, Continue };
 
-    static void resume();
+#ifdef ADV_UNIT_TESTS
+struct log_exception: std::exception {};
+#endif
 
-  private:
-    static void suspend();
-  };
+#ifdef ADVi3PP_LOG
 
-  template<typename T, size_t S>
-  struct Stack;
+// --------------------------------------------------------------------
+// NoLogging
+// --------------------------------------------------------------------
+
+struct NoFrameLogging {
+  NoFrameLogging();
+  ~NoFrameLogging();
+
+  void allow();
+
+private:
+  bool suspend_ = false;
+};
+
+// --------------------------------------------------------------------
+// Log
+// --------------------------------------------------------------------
+
+struct Log {
+  Log(bool enabled);
 
   struct EndOfLine {};
-  struct Decimal {};
-  struct Hexadecimal {};
 
-  struct Logger {
-    #if ADVi3PP_LOG > 0
-    const Logger& operator<<(const FlashChar* data) const;
-    const Logger& operator<<(const char* data) const;
-    const Logger& operator<<(uint8_t data) const;
-    const Logger& operator<<(uint16_t data) const;
-    const Logger& operator<<(uint32_t data) const;
-#if defined(ADV_STD_SIZE_T)
-    const Logger& operator<<(size_t data) const;
+  Log& operator<<(const char* data);
+  Log& operator<<(const FlashChar* data);
+  Log& operator<<(bool data);
+  Log& operator<<(uint8_t data);
+  Log& operator<<(uint16_t data);
+  Log& operator<<(uint32_t data);
+  Log& operator<<(int8_t data);
+  Log& operator<<(int16_t data);
+  Log& operator<<(int32_t data);
+  Log& operator<<(double data);
+  template<typename T, size_t S> Log& operator<<(adv::array<T, S> data);
+  Log& write(const uint8_t* data, size_t size);
+  Log& operator<<(EndOfLine eol);
+
+  static Log& log(LogState state = LogState::Start);
+  static Log& error();
+  static Log& frame(LogState state = LogState::Continue);
+  static EndOfLine endl() { return EndOfLine{}; }
+  void dump(const uint8_t* bytes, size_t size = 1, bool separator = true);
+
+private:
+  static Log logging_;
+  static Log frame_logging_;
+  bool enabled_ = true;
+  bool suspend_ = false;
+
+  friend NoFrameLogging;
+};
+
+// --------------------------------------------------------------------
+// Log
+// --------------------------------------------------------------------
+
+inline Log::Log(bool enabled): enabled_{enabled} {
+}
+
+template<typename T, size_t S>
+Log& Log::operator<<(adv::array<T, S> data) {
+  write(data.data(), S);
+  return *this;
+}
+
+// --------------------------------------------------------------------
+// NoFrameLogging
+// --------------------------------------------------------------------
+
+inline NoFrameLogging::NoFrameLogging()
+: suspend_{Log::frame_logging_.suspend_} {
+#ifndef ADVi3PP_LOG_ALL_FRAMES
+  Log::frame_logging_.suspend_ = true;
 #endif
-    const Logger& operator<<(int8_t data) const;
-    const Logger& operator<<(int16_t data) const;
-    const Logger& operator<<(int32_t data) const;
-    const Logger& operator<<(int64_t data) const;
-    const Logger& operator<<(double data) const;
-    template<typename T, size_t S>
-    const Logger& operator<<(const adv::array<T, S> &data) const;
-    void operator<<(const EndOfLine& eol) const;
-    const Logger& operator<<(const Decimal& dec) const;
-    const Logger& operator<<(const Hexadecimal& hex) const;
-    const Logger& operator<<(Page page) const;
-    template<typename T, size_t S>
-    const Logger& operator<<(const Stack<T, S> &stack) const;
+}
 
-    static void write(const uint8_t* data, size_t size);
-    #else
-    const Logger& operator<<(const FlashChar* data) const { return *this; }
-    const Logger& operator<<(const char* data) const { return *this; }
-    const Logger& operator<<(uint8_t data) const { return *this; }
-    const Logger& operator<<(uint16_t data) const { return *this; }
-    const Logger& operator<<(uint32_t data) const { return *this; }
-    const Logger& operator<<(int8_t data) const { return *this; }
-    const Logger& operator<<(int16_t data) const { return *this; }
-    const Logger& operator<<(int32_t data) const { return *this; }
-    const Logger& operator<<(double data) const { return *this; }
-    template<typename T, size_t S>
-    const Logger& operator<<(const adv::array<T, S> &data) const { return *this; }
-    void operator<<(const EndOfLine& eol) const { }
-    const Logger& operator<<(const Decimal& dec) const { return *this; }
-    const Logger& operator<<(const Hexadecimal& hex) const { return *this; }
-    const Logger& operator<<(Page page) const { return *this; }
-    template<typename T, size_t S>
-    const Logger& operator<<(const Stack<T, S> &stack) const { return *this; }
+inline NoFrameLogging::~NoFrameLogging() {
+  allow();
+}
 
-    static void write(const uint8_t* data, size_t size) {}
-    #endif
-  };
+inline void NoFrameLogging::allow() {
+#ifndef ADVi3PP_LOG_ALL_FRAMES
+  Log::frame_logging_.suspend_ = suspend_;
+#endif
+}
 
-  namespace Log {
-    Logger error();
-    Logger warning();
-    Logger info();
-    Logger verbose(bool start = false);
-    Decimal decimal();
-    Hexadecimal hexadecimal();
-    EndOfLine endl();
-  }
+// --------------------------------------------------------------------
 
-  #if ADVi3PP_LOG > 0
-  namespace internals {
-    void write_error();
-    void write_warning();
-    void write_info();
-    void write_verbose(bool start);
-    void write(const FlashChar* data);
-    void write(const char* data);
-    void write(uint8_t data);
-    void write(uint16_t data);
-    void write(uint32_t data);
-    void write(size_t data);
-    void write(int8_t data);
-    void write(int16_t data);
-    void write(int32_t data);
-    void write(double data);
-    void write_eol();
-    void write_decimal();
-    void write_hexadecimal();
-    void write(const uint8_t* data, size_t size);
-    void dump(const uint8_t* bytes, size_t size = 1, bool separator = true);
-    void suspend_until_endl();
-  }
-  #endif
-
-  void invalid_key_code(Page page, uint16_t key_code);
-
-  #if ADVi3PP_LOG <= 0
-  inline void invalid_key_code(Page page, uint16_t key_code) {}
-  #endif
-
-  namespace Log {
-    #if ADVi3PP_LOG <= 0
-    inline Logger error() { return Logger{}; }
-    inline Logger warning() { return Logger{}; }
-    inline Logger info() {return Logger{}; }
-    inline Logger verbose(bool) { return Logger{}; }
-    #else
-    inline Logger error() { internals::write_error(); return Logger{}; }
-    #if ADVi3PP_LOG > 1
-    inline Logger warning() { internals::write_warning(); return Logger{}; }
-    #else
-    inline Logger warning() { internals::suspend_until_endl(); return Logger{}; }
-    #endif
-    #if ADVi3PP_LOG > 2
-    inline Logger info() { internals::write_info(); return Logger{}; }
-    #else
-    inline Logger info() { internals::suspend_until_endl(); return Logger{}; }
-    #endif
-    #if ADVi3PP_LOG > 3
-    inline Logger verbose(bool start) { internals::write_verbose(start); return Logger{}; }
-    #else
-    inline Logger verbose(bool) { internals::suspend_until_endl(); return Logger{}; }
-    #endif
-    #endif
-
-    inline Decimal decimal() { return Decimal{}; }
-    inline Hexadecimal hexadecimal() { return Hexadecimal{}; }
-    inline EndOfLine endl() { return EndOfLine{}; }
-  }
-
-  #if ADVi3PP_LOG > 0
-  inline const Logger& Logger::operator<<(const FlashChar* data) const {
-    internals::write(data);
-    return *this;
-  }
-
-  inline const Logger& Logger::operator<<(const char* data) const {
-    internals::write(data);
-    return *this;
-  }
-
-  inline const Logger& Logger::operator<<(Page page) const {
-    *this << Log::decimal() << static_cast<uint8_t>(page) << Log::hexadecimal();
-    return *this;
-  }
-
-  inline const Logger& Logger::operator<<(uint8_t data) const {
-    internals::write(data);
-    return *this;
-  }
-
-  inline const Logger& Logger::operator<<(uint16_t data) const {
-    internals::write(data);
-    return *this;
-  }
-
-  inline const Logger& Logger::operator<<(uint32_t data) const {
-    internals::write(data);
-    return *this;
-  }
-
-#if defined(ADV_STD_SIZE_T)
-  inline const Logger& Logger::operator<<(size_t data) const {
-    internals::write(data);
-    return *this;
-  }
+#ifndef assert
+void assert_(const char *msg, const char *file, uint16_t line);
+#define assert(E) (void)((E) || (ADVi3pp::assert_(#E, __FILE__, __LINE__), 0))
 #endif
 
-  inline const Logger& Logger::operator<<(int8_t data) const {
-    internals::write(data);
-    return *this;
-  }
+void debug_break();
 
-  inline const Logger& Logger::operator<<(int16_t data) const {
-    internals::write(data);
-    return *this;
-  }
+#else
+struct Log {
+  struct EndOfLine {};
 
-  inline const Logger& Logger::operator<<(int32_t data) const {
-    internals::write(data);
-    return *this;
-  }
+  Log& operator<<(const char*) { return log(); }
+  Log& operator<<(const FlashChar*) { return log(); }
+  Log& operator<<(bool data) { return log(); }
+  Log& operator<<(uint8_t) { return log(); }
+  Log& operator<<(uint16_t) { return log(); }
+  Log& operator<<(uint32_t) { return log(); }
+  Log& operator<<(int8_t data) { return log(); }
+  Log& operator<<(int16_t data) { return log(); }
+  Log& operator<<(int32_t data) { return log(); }
+  Log& operator<<(double) { return log(); }
+  template<typename T, size_t S> Log& operator<<(adv::array<T, S> data) { return log(); }
+  Log& write(const uint8_t* data, size_t size) { return log(); }
+  void operator<<(EndOfLine) {};
 
-  inline const Logger& Logger::operator<<(double data) const {
-    internals::write(data);
-    return *this;
-  }
+  static Log& log() { static Log log; return log; }
+  static Log& error();
+  static Log& frame(LogState state = LogState::Continue) { return log(); }
+  static EndOfLine endl() { return EndOfLine{}; }
+  static void dump(const uint8_t*, size_t) {}
 
-  template<typename T, size_t S>
-  const Logger& Logger::operator<<(const adv::array<T, S> &data) const {
-    write(data.data(), S);
-    return *this;
-  }
+#ifdef ADVi3PP_UNIT_TEST
+  Log& operator<<(unsigned long data) { return log(); }
+#endif
+};
 
-  inline void Logger::operator<<(const EndOfLine&) const {
-    internals::write_eol();
-  }
+struct NoFrameLogging {
+  NoFrameLogging() {}
+  ~NoFrameLogging() {}
 
-  inline const Logger& Logger::operator<<(const Decimal&) const {
-    internals::write_decimal();
-    return *this;
-  }
+  void allow() {}
+};
 
-  inline const Logger& Logger::operator<<(const Hexadecimal&) const {
-    internals::write_hexadecimal();
-    return *this;
-  }
+inline Log& Log::error() {
+#ifdef ADV_UNIT_TESTS
+  throw log_exception();
+#endif
+  return log();
+}
 
-  template<typename T, size_t S>
-  const Logger& Logger::operator<<(const Stack<T, S> &stack) const {
-    if(stack.is_empty())
-      *this << F("<empty>");
-    for(size_t i = 0; i < stack.size(); ++i)
-      *this << stack[i];
-    return *this;
-  }
+#ifndef assert
+#define assert(E) (void)(false)
+#endif
 
-  inline void Logger::write(const uint8_t* data, size_t size) {
-    internals::write(data, size);
-  }
-  #endif
+inline void debug_break() {}
 
-  #if ADVi3PP_LOG >= 5 || ADVi3PP_LOG == 0
-  inline void SuspendLogging::suspend() {}
-  inline void SuspendLogging::resume() {}
-  #endif
+#endif
 
-  #ifndef assert
-  #if ADVi3PP_LOG > 0
-  void assert_(const FlashChar*msg, const FlashChar *file, uint16_t line);
-  #define assert(E) (void)((E) || (ADVi3pp::assert_(F(#E), F(__FILE__), __LINE__), 0))
-  #else
-  #define assert(E) (void)(false)
-  #endif
-  #endif
-
-  #if ADVi3PP_LOG > 0
-  void debug_break();
-  #else
-  inline void debug_break() {}
-  #endif
 }

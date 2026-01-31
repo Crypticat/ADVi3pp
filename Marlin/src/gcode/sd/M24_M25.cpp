@@ -41,7 +41,7 @@
   #include "../../feature/powerloss.h"
 #endif
 
-#if DGUS_LCD_UI_MKS
+#if ENABLED(DGUS_LCD_UI_MKS)
   #include "../../lcd/extui/dgus/DGUSDisplayDef.h"
 #endif
 
@@ -52,7 +52,7 @@
  */
 void GcodeSuite::M24() {
 
-  #if DGUS_LCD_UI_MKS
+  #if ENABLED(DGUS_LCD_UI_MKS)
     if ((print_job_timer.isPaused() || print_job_timer.isRunning()) && !parser.seen("ST"))
       MKS_resume_print_move();
   #endif
@@ -82,7 +82,7 @@ void GcodeSuite::M24() {
     TERN_(HOST_PROMPT_SUPPORT, hostui.prompt_open(PROMPT_INFO, F("Resuming SD"), FPSTR(DISMISS_STR)));
   #endif
 
-  ui.reset_status();
+  // ui.reset_status(); @advi3++ disable this line otherwise, any error message is overidden
 }
 
 /**

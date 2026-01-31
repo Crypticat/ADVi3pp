@@ -24,29 +24,18 @@
 /**
  * power.h - power control
  */
-#if PIN_EXISTS(PS_ON_EDM) || (PIN_EXISTS(PS_ON1_EDM) && ENABLED(PSU_OFF_REDUNDANT))
-  #define PSU_TRACK_STATE_MS 1
-#endif
 
-#if ANY(AUTO_POWER_CONTROL, POWER_OFF_TIMER, PSU_TRACK_STATE_MS)
+#if ANY(AUTO_POWER_CONTROL, POWER_OFF_TIMER)
   #include "../core/millis_t.h"
 #endif
 
 class Power {
   public:
     static bool psu_on;
-    static bool enabled;  // @advi3++ AUTO_POWER_CONTROL
-    static bool inverted;  // @advi3++ PSU_ACTIVE_STATE
-    static uint16_t timeout; // @advi3++ POWER_TIMEOUT
-    static uint16_t temperature; // @advi3++ AUTO_POWER_E_TEMP
 
     static void init();
-    static void power_on(bool force = false);  // @advi3++
-    static void power_off(bool force = false);  // @advi3++
-    static void enable(bool enable);  // @advi3++
-    static void set_timeout(uint16_t timeout);  // @advi3++
-    static void set_temperature(uint16_t temp);  // @advi3++
-    static void invert(bool invert);  // @advi3++
+    static void power_on();
+    static void power_off();
 
     #if ANY(POWER_OFF_TIMER, POWER_OFF_WAIT_FOR_COOLDOWN)
       #if ENABLED(POWER_OFF_TIMER)

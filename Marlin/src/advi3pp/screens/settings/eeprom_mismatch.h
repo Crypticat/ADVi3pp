@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,21 @@
 
 #pragma once
 
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::EepromMismatch {
-  bool handle_command(uint16_t key_code);
+namespace ADVi3pp {
+
+//! EEPROM Mismatch Page
+struct EepromMismatch: Screen<EepromMismatch> {
+  static constexpr Page PAGE = Page::EEPROMMismatch;
+  static constexpr Action ACTION = Action::EEPROMMismatch;
+
+private:
+  void on_save_command();
+
+  friend Parent;
+};
+
+extern EepromMismatch eeprom_mismatch;
+
 }

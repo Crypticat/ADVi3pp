@@ -19,11 +19,22 @@
  */
 
 #pragma once
-#if ENABLED(PRINTCOUNTER)
 
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::Statistics {
-  bool handle_command(uint16_t key_code);
+namespace ADVi3pp {
+
+//! Statistics Page
+struct Statistics: Screen<Statistics> {
+  static constexpr Page PAGE = Page::Statistics;
+  static constexpr Action ACTION = Action::Statistics;
+
+private:
+  bool on_enter();
+  void send_stats();
+  friend Parent;
+};
+
+extern Statistics statistics;
+
 }
-#endif

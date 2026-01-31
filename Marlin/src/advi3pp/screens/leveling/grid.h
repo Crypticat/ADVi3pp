@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +20,38 @@
 
 #pragma once
 
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::Grid {
-  bool handle_command(uint16_t key_code);
+namespace ADVi3pp {
+
+#ifdef ADVi3PP_PROBE
+
+//! Leveling Grid Page
+struct LevelingGrid: Screen<LevelingGrid> {
+  static constexpr Page PAGE = Page::SensorGrid;
+  static constexpr Action ACTION = Action::SensorGrid;
+
+private:
+  bool on_enter();
+  void on_save_command();
+  void on_back_command();
+
+  friend Parent;
+};
+
+#else
+
+//! Leveling Grid Page
+struct LevelingGrid: Screen<LevelingGrid> {
+  static constexpr Page PAGE = Page::NoSensor;
+  static constexpr Action ACTION = Action::SensorGrid;
+
+private:
+    friend Parent;
+};
+
+#endif
+
+extern LevelingGrid leveling_grid;
+
 }
-

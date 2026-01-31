@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,33 +19,16 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-#include "../../../lcd/extui/ui_api.h"
-#include "../../core/core.h"
 #include "eeprom_mismatch.h"
 
-namespace ADVi3pp::EepromMismatch {
+namespace ADVi3pp {
 
-  inline namespace internals {
-    void save_command();
-  }
+EepromMismatch eeprom_mismatch;
 
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: Pages::show(Page::EepromMismatch); break;
-      case KEY_CODE_BACK: Pages::back(Pages::BACK_OPTIONS::NONE); break;
-      case KEY_CODE_SAVE: save_command(); break;
-      default: return false;
-    }
-    return true;
-  }
+//! Handles the Save (Continue) command
+void EepromMismatch::on_save_command() {
+  settings.save();
+  pages.show(Page::Setup, Action::Setup);
+}
 
-  inline namespace internals {
-
-    //! Handles the Save (Continue) command
-    void save_command() {
-      ExtUI::saveSettings();
-      Core::display(Page::Setup, Core::DISPLAY_OPTIONS::CLEAR_CURRENT);
-    }
-
-  }
 }

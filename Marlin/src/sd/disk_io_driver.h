@@ -29,8 +29,6 @@
  *
  * Interface for low level disk io
  */
-// @advi3++ Not used
-#if 0
 class DiskIODriver {
 public:
   /**
@@ -68,4 +66,3 @@ public:
 
   virtual void idle() = 0;
 };
-#endif

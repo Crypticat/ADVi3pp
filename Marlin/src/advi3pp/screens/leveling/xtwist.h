@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,66 @@
 #pragma once
 
 #include "../../lib/ADVstd/array.h"
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::XTwist {
-  bool handle_command(uint16_t key_code);
+namespace ADVi3pp {
+
+#ifdef ADVi3PP_PROBE
+
+//! X Twist Tuning Page
+struct XTwist: Screen<XTwist> {
+  static constexpr Page PAGE = Page::XTwist;
+  static constexpr Action ACTION = Action::XTwist;
+
+  enum class Point: uint8_t {L, M, R};
+
+  void minus();
+  void plus();
+
+private:
+  enum class Multiplier: uint8_t { M1, M2, M3 };
+
+  bool on_dispatch(KeyValue key_value);
+  bool on_enter();
+  void on_save_command();
+  void on_back_command();
+  void on_abort();
+
+  bool on_homed();
+  void multiplier1_command();
+  void multiplier2_command();
+  void multiplier3_command();
+  void move_x(Point x);
+  void point_L_command();
+  void point_M_command();
+  void point_R_command();
+  double get_multiplier_value() const;
+  void adjust_height(double offset);
+  void send_data() const;
+  float get_x_mm(Point x) const;
+
+private:
+  Multiplier multiplier_ = Multiplier::M1;
+  Point point_ = Point::L;
+  bool enabled_ = false;
+  adv::array<float, ExtUI::xTwistPoints> z_offsets_;
+
+  friend Parent;
+};
+
+#else
+
+struct XTwist: Screen<XTwist> {
+  static constexpr Page PAGE = Page::NoSensor;
+  static constexpr Action ACTION = Action::XTwist;
+
+  void on_mesh_updated(const int8_t xpos, const int8_t ypos, const float zval) {}
+  void minus() {}
+  void plus() {}
+};
+
+#endif
+
+extern XTwist xtwist;
+
 }

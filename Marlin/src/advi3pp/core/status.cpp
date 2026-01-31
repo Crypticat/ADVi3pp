@@ -1,12 +1,12 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -20,71 +20,132 @@
 
 #include "../../inc/MarlinConfig.h"
 #include "../../lcd/extui/ui_api.h"
-#include "../core/logging.h"
-#include "../core/dgus.h"
-#include "../core/progress.h"
+#include "logging.h"
 #include "status.h"
+#include "pages.h"
+#include "dgus.h"
+#include "enums.h"
 
-namespace ADVi3pp::Status {
+namespace ADVi3pp {
 
-  inline namespace internals {
+Status status;
 
-    constexpr size_t MESSAGE_LENGTH = 32; //!< Size of messages to be displayed on the LCD Panel
 
-    millis_t status_message_expire_ms = 0;
+void Status::reset() {
+  has_status_ = false;
+  set("");
+}
 
-    void send_status(FSTR_P message);
-    void send_status(const char* message);
-  }
+void Status::reset_and_clear() {
+  pages.clear_temporaries();
+  reset();
+}
 
-  void set(FSTR_P message, STATUS_OPTIONS options) {
-    //Log::info() << F("Status::set#1") << message << static_cast<uint16_t>(options) << Log::endl();
-    if(test_one_bit(options, STATUS_OPTIONS::RESET)) reset();
-    bool persistent = test_one_bit(options, STATUS_OPTIONS::PERSISTENT);
-    // If a persistent message is already displayed, do not override it my a non-persistent one
-    if(status_message_expire_ms == 0 && !persistent) return;
-    status_message_expire_ms = persistent ? 0 : millis() + (STATUS_MESSAGE_TIMEOUT_SEC) * 1000UL;
-    send_status(message);
-  }
+bool Status::has() const {
+  return has_status_;
+}
 
-  void set(const char* message, STATUS_OPTIONS options) {
-    //Log::info() << F("Status::set#2") << message << static_cast<uint16_t>(options) << Log::endl();
-    if(test_one_bit(options, STATUS_OPTIONS::RESET)) reset();
-    bool persistent = test_one_bit(options, STATUS_OPTIONS::PERSISTENT);
-    // If a persistent message is already displayed, do not override it my a non-persistent one
-    if(status_message_expire_ms == 0 && !persistent) return;
-    status_message_expire_ms = persistent ? 0 : millis() + (STATUS_MESSAGE_TIMEOUT_SEC) * 1000UL;
-    send_status(message);
-  }
+void Status::set(const FlashChar* message) {
+  ADVString<message_length> text{message};
+  send_status(text);
+  has_status_ = true;
+}
 
-  void set_default() {
-    set(GET_TEXT_F(WELCOME_MSG), Status::STATUS_OPTIONS::RESET);
-  }
+void Status::set(const char* message) {
+  ADVString<message_length> text{message};
+  send_status(text);
+  has_status_ = true;
+}
 
-  void reset() {
-    //Log::info() << F("Status::reset") << Log::endl();
-    status_message_expire_ms = millis() + (STATUS_MESSAGE_TIMEOUT_SEC) * 1000UL;
-  }
+void Status::format(const FlashChar* fmt, va_list& args) {
+  ADVString<message_length> text{};
+  text.set(fmt, args);
+  send_status(text);
+  has_status_ = true;
+}
 
-  void init() {
-    status_task.set([] () -> CALLBACK_RESULT {
-      if(status_message_expire_ms && ELAPSED(millis(), status_message_expire_ms))
-        LCD_RESET_STATUS();
-      return CALLBACK_RESULT::CONTINUE;
-    });
-  }
+void Status::format(const FlashChar* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  format(fmt, args);
+  va_end(args);
+}
 
-  inline namespace internals {
+void Status::send() {
+  send_progress();
+  send_times();
+}
 
-    void send_status(FSTR_P message) {
-      WriteRamRequest{Variable::Message}.write_text(message, MESSAGE_LENGTH);
-      WriteRamRequest{Variable::CenteredMessage}.write_centered_text(message, MESSAGE_LENGTH);
-    }
+void Status::send_progress() {
+  auto done = ExtUI::getProgress_percent();
+  if(done == percent_)
+    return;
+  percent_ = done;
 
-    void send_status(const char* message) {
-      WriteRamRequest{Variable::Message}.write_text(message, MESSAGE_LENGTH);
-      WriteRamRequest{Variable::CenteredMessage}.write_centered_text(message, MESSAGE_LENGTH);
-    }
+  ADVString<progress_text_length> progress{filename_};
+  if(progress.length() > 0)
+    progress  << " " << done << "%";
 
-  }
+  ADVString<progress_percent_length> progress_percent{};
+  progress_percent << done << "%";
+
+  WriteRamRequest{Variable::ProgressText}.write_text(progress);
+  WriteRamRequest{Variable::ProgressPercent}.write_text(progress_percent);
+}
+
+template<size_t N>
+void set_duration(ADVString<N>& str, uint32_t seconds) {
+  auto h = uint16_t(seconds / (60 * 60));
+  auto m = uint16_t((seconds / 60) % 60UL);
+
+  if(h < 100)
+    str.format(F("%02hu:%02hu"), h, m);
+  else
+    str.format(F("%hu:%02hu"), h, m);
+}
+
+void Status::send_times() {
+	if(!ExtUI::isPrinting()) return;
+  auto current_time = millis();
+  if(!ELAPSED(current_time, next_update_times_time_))
+    return;
+  next_update_times_time_ = current_time + 2000; // every 2 seconds
+
+  ADVString<tc_length> tc; // time to complete
+  ADVString<et_length> et; // elapsed time
+
+  auto durationSec = ExtUI::getProgress_seconds_elapsed();
+  auto progress = ExtUI::getProgress_percent();
+
+  set_duration(et, durationSec);
+
+  auto tcSec = progress <= 0 ? 0 : (durationSec * (100 - progress) / progress);
+  if (progress < 5)
+    tc.set(F("--:--"));
+  else
+      set_duration(tc, tcSec);
+
+  WriteRamRequest{Variable::ET}.write_text(et);
+  WriteRamRequest{Variable::TC}.write_text(tc);
+}
+
+//! Set the name for the progress message. Usually, it is the name of the file printed.
+void Status::set_filename(const char* name) {
+  filename_ = name;
+  percent_ = -1;
+  send_progress();
+}
+
+//! Clear the progress message
+void Status::reset_progress() {
+  filename_.reset();
+  percent_ = -1;
+  send_progress();
+}
+
+void Status::send_status(ADVString<message_length>& message) {
+  WriteRamRequest{Variable::Message}.write_text(message);
+  WriteRamRequest{Variable::CenteredMessage}.write_centered_text(message);
+}
+
 }

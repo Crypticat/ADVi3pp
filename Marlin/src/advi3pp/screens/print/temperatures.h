@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,9 +21,27 @@
 #pragma once
 
 #include "../../core/task.h"
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::Temperatures {
-  bool handle_command(uint16_t key_code);
-  void display(void (*cb)());
+namespace ADVi3pp {
+
+//! Temperatures Graph
+struct Temperatures: Screen<Temperatures> {
+  static constexpr Page PAGE = Page::Temperature;
+  static constexpr Action ACTION = Action::Temperatures;
+
+  void show(const Callback& back);
+  void show();
+
+private:
+  void on_back_command();
+
+private:
+  Callback back_;
+
+  friend Parent;
+};
+
+extern Temperatures temperatures;
+
 }

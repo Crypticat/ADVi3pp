@@ -70,7 +70,7 @@ public:
   static void init(const bool set_voltage=false);
   static bool od_5v_mode;         // Initialized by settings.load, 0 = Open Drain; 1 = 5V Drain
 
-  #if HAS_BLTOUCH_HS_MODE
+  #ifdef BLTOUCH_HS_MODE
     static bool high_speed_mode;  // Initialized by settings.load, 0 = Low Speed; 1 = High Speed
   #else
     static constexpr bool high_speed_mode = false;
@@ -78,12 +78,12 @@ public:
 
   // @advi3++ will not force but will allow to use this feature
   #ifdef BLTOUCH_ALLOW_SW_MODE
-    static bool sw_mode;
+    static bool touch_sw_mode;
   #else
     static constexpr bool touch_sw_mode = false;
   #endif
 
-  static float z_extra_clearance() { return TERN0(HAS_BLTOUCH_HS_MODE, high_speed_mode ? BLTOUCH_HS_EXTRA_CLEARANCE : 0); }
+  static float z_extra_clearance() { return high_speed_mode ? 7 : 0; }
 
   // DEPLOY and STOW are wrapped for error handling - these are used by homing and by probing
   static bool deploy()              { return deploy_proc(); }

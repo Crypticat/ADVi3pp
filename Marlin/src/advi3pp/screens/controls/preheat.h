@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,33 @@
 
 #pragma once
 
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::Preheat {
-  bool handle_command(uint16_t key_code);
+namespace ADVi3pp {
+
+//! Preheat Page
+struct Preheat: Screen<Preheat> {
+  static constexpr Page PAGE = Page::Preheat;
+  static constexpr Action ACTION = Action::Preheat;
+  static constexpr size_t NB_PRESETS = 5;
+
+private:
+  bool on_dispatch(KeyValue key_value);
+  bool on_enter();
+  void on_save_command();
+
+  void send_presets();
+  void retrieve_presets();
+  void previous_command();
+  void next_command();
+  void cooldown_command();
+
+private:
+  size_t index_ = 0;
+
+  friend Parent;
+};
+
+extern Preheat preheat;
+
 }

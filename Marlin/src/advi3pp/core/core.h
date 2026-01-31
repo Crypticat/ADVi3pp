@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,80 +20,74 @@
 
 #pragma once
 
-#include "../../inc/MarlinConfig.h"
 #include "string.h"
 #include "task.h"
 #include "enums.h"
-#include "../../module/temperature.h"
 
 class GCodeParser;
 
+
 namespace ADVi3pp {
 
-  // ----------------------------------------------------------------------------
-  // Once - Execute only one time
-  // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Once - Execute only one time
+// ----------------------------------------------------------------------------
 
-  struct Once {
-    operator bool();
-  private:
-    bool once_ = true;
-  };
+struct Once {
+  operator bool();
+private:
+  bool once_ = true;
+};
 
-  // ----------------------------------------------------------------------------
-  // Core
-  // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Core
+// ----------------------------------------------------------------------------
 
-  namespace Core {
-    enum class PIN_STATE: uint8_t { Low = 0, High = 1 };
-    enum class PIN_DIRECTION: uint8_t { Input = 0, Output = 1 };
-    enum class PIN_PULL: uint8_t { High = 1, Low = 2, HiZ = 0, Up = 1, None = 0 };
-    enum class DISPLAY_OPTIONS { NONE = 0x0000, CLEAR_TEMPORARIES = 0x0001, BACK_ALL = 0x0002, CLEAR_CURRENT = 0x0004 };
+struct Core {
+  enum class PinState: uint8_t { Off = 0, On = 1, Output = 2};
 
-    constexpr long MAX_X = X_MAX_POS;
-    constexpr long MIN_X = X_MIN_POS;
-    constexpr long MAX_Y = Y_MAX_POS;
-    constexpr long MIN_Y = Y_MIN_POS;
-    constexpr long MAX_Z = Z_MAX_POS;
-    constexpr long MIN_Z = Z_MIN_POS;
-    constexpr long MAX_E = EXTRUDE_MAXLENGTH * 0.9;
-    constexpr long MIN_E = -EXTRUDE_MAXLENGTH * 0.9;
+  void startup();
+  void idle();
+  void killed(float temp, const FlashChar* error, const FlashChar* component);
 
-    void startup();
-    void idle();
-    void killed(const FlashChar* error, const FlashChar* component);
-    void killed(const FlashChar* error, heater_id_t header_id);
-    void send_lcd_zero();
+  bool is_busy();
+  void inject_commands(const FlashChar* commands);
+  void inject_commands(const char *commands);
+  void process_action(Action action, KeyValue key_value);
 
-    bool is_busy();
-    bool is_printing();
-    bool is_print_paused();
+  template<size_t L> ADVString<L>& convert_version(ADVString<L>& version, uint16_t hex_version);
 
-    bool check_not_busy();
-    void inject_commands(const FlashChar* commands);
-    void inject_commands(const char *commands);
-    void show_temps();
-    void process(Page page, uint16_t key_code, uint16_t arg);
-    void print_started();
-    void print_paused();
-    void print_done();
-    void pause_temperature();
-    void display(Page page, DISPLAY_OPTIONS options = DISPLAY_OPTIONS::NONE, uint16_t arg = 0);
+  static PinState get_pin_state(uint8_t pin);
+  static float ensure_z_enough_room();
 
-    PIN_STATE get_pin_state(uint8_t pin);
-    PIN_DIRECTION get_pin_direction(uint8_t pin);
-    PIN_PULL get_pin_pull(uint8_t pin);
-    float ensure_z_enough_room();
+  void media_inserted();
+  void media_removed();
+  void media_error();
 
-    void on_settings_loaded(bool success);
-    void on_settings_validated(bool success);
-    bool are_settings_invvalid();
+private:
+  bool init();
+  void send_gplv3_7b_notice();
+  void update_progress();
+  void from_lcd();
+  void to_lcd();
+  void send_lcd_data();
+  void send_lcd_touch_request();
 
-    void on_power_loss_set(bool set);
-    void on_power_loss();
-    void on_power_loss_resume();
-    void on_power_off();
-  }
+private:
+  Once once_{};
+  Action last_action_ = Action::None;
+  millis_t last_action_time_ = 0;
+};
+
+extern Core core;
+
+//! Convert a version from its hexadecimal representation.
+//! @param hex_version  Hexadecimal representation of the version
+//! @return             Version as a string
+template<size_t L>
+ADVString<L>& Core::convert_version(ADVString<L>& version, uint16_t hex_version) {
+  version << hex_version / 0x0100 << '.' << (hex_version % 0x100) / 0x10 << '.' << hex_version % 0x10;
+  return version;
 }
 
-ENABLE_BITMASK_OPERATOR(ADVi3pp::Core::DISPLAY_OPTIONS);
+}

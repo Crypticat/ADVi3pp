@@ -11,10 +11,10 @@ if [[ "$OSTYPE" != "darwin"* ]]; then echo "Work only on macOS, sorry" ; exit 1;
 scripts="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 ret=$?; if [[ $ret != 0 ]]; then exit $ret; fi
 
-mkdir -p "${scripts}/../../releases/v${version}"
+mkdir -p "${scripts}/../../../releases/v${version}"
 ret=$?; if [[ $ret != 0 ]]; then exit $ret; fi
 
-release="$( cd "${scripts}/../../releases/v${version}" && pwd )"
+release="$( cd "${scripts}/../../../releases/v${version}" && pwd )"
 ret=$?; if [[ $ret != 0 ]]; then exit $ret; fi
 
 advi3pp="$( cd "${scripts}/../" && pwd )"
@@ -80,6 +80,14 @@ cp "${advi3pp}/.pio/build/advi3pp_52c_bltouch/firmware.hex" "${release}/ADVi3pp-
 cp "${advi3pp}/.pio/build/advi3pp_54/firmware.hex" "${release}/ADVi3pp-Mainboard-54-${version}.hex"
 cp "${advi3pp}/.pio/build/advi3pp_54_bltouch/firmware.hex" "${release}/ADVi3pp-Mainboard-54-BLTouch-${version}.hex"
 ret=$?; if [[ $ret != 0 ]]; then exit $ret; fi
+
+echo
+echo "***** Copy Arduino Core..."
+echo
+pushd "${advi3pp}" >/dev/null || exit
+zip -r -x@"${scripts}"/excludes-core.txt "${release}/ArduinoCore-${version}.zip" ArduinoCore
+ret=$?; if [[ $ret != 0 ]]; then popd && exit $ret; fi
+popd >/dev/null || exit
 
 echo
 echo "**** ADVi3++ ${version} is ready in ${release}"

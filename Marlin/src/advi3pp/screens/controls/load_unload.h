@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,39 @@
 
 #pragma once
 
-#include "../../core/pages.h"
+#include "../../core/task.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::LoadUnload {
-  bool handle_command(uint16_t key_code);
+namespace ADVi3pp {
+
+//! Load and Unload Page
+struct LoadUnload: Screen<LoadUnload> {
+  static constexpr Page PAGE =  Page::LoadUnload;
+  static constexpr Action ACTION = Action::LoadUnload;
+
+private:
+  bool on_dispatch(KeyValue key_value);
+  bool on_enter();
+  void on_back_command();
+
+  void prepare(float length, feedRate_t feedrate);
+  void load_command();
+  void unload_command();
+  void send_data();
+  void heating_task();
+  void extrude();
+  void extrude_task();
+  bool cancel_heating();
+  bool cancel_extrude();
+
+  friend Parent;
+
+private:
+  float previous_z_ = 0;
+  float length_;
+  float feedrate_;
+};
+
+extern LoadUnload load_unload;
+
 }

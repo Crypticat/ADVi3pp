@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,132 +19,114 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-#include "../../../lcd/extui/ui_api.h"
-#include "../../core/status.h"
-#include "../../core/pool.h"
-#include "../common/wait.h"
 #include "load_unload.h"
+#include "../../core/wait.h"
 
-namespace ADVi3pp::LoadUnload {
 
-  inline namespace internals {
-    constexpr uint16_t KEY_CODE_LOAD = 1;
-    constexpr uint16_t KEY_CODE_UNLOAD = 2;
-    constexpr Variable VAR_TEMP = Variable::Value0;
+namespace ADVi3pp {
 
-    struct Data {
-      float previous_z_ = 0;
-      bool load_ = true; // false for unload
-    };
+LoadUnload load_unload;
 
-    inline Data& pool() { return Pool::get<Data>(Page::LoadUnload); }
 
-    void show_command();
-    void back_command();
-    void load_command();
-    void unload_command();
-
-    void prepare(float length, feedRate_t feedrate);
-    void extrude();
-  }
-
-  //! Handle Load & Unload actions.
-  //! @param key_value    The sub-action to handle
-  //! @return             True if the action was handled
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW:   show_command(); break;
-      case KEY_CODE_BACK:   back_command(); break;
-      case KEY_CODE_LOAD:   load_command(); break;
-      case KEY_CODE_UNLOAD: unload_command(); break;
-      default: return false;
-    }
+//! Handle Load & Unload actions.
+//! @param key_value    The sub-action to handle
+//! @return             True if the action was handled
+bool LoadUnload::on_dispatch(KeyValue key_value) {
+  if(Parent::on_dispatch(key_value))
     return true;
+
+  switch(key_value){
+    case KeyValue::Load:    load_command(); break;
+    case KeyValue::Unload:  unload_command(); break;
+    default:                return false;
   }
 
-  inline namespace internals {
+  return true;
+}
 
-    void show_command() {
-      if(!Core::check_not_busy()) return;
-      Pool::reset<Data>(Page::LoadUnload);
-      Status::reset();
-      WriteRamRequest{VAR_TEMP}.write_word(ExtUI::getDefaultTemp_celsius(ExtUI::H0));
-      pool().previous_z_ = Core::ensure_z_enough_room();
-      Pages::show(Page::LoadUnload);
-    }
+void LoadUnload::send_data() {
+  WriteRamRequest{Variable::Value0}.write_word(static_cast<uint16_t>(ExtUI::getDefaultTemp_celsius(ExtUI::E0)));
+}
 
-    void back_command() {
-      ExtUI::setTargetTemp_celsius(0, ExtUI::H0);
-      ExtUI::setAxisPosition_mm(pool().previous_z_, ExtUI::Z, 20);
-      Pages::back(Pages::BACK_OPTIONS::FINISH_MOVE);
-    }
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool LoadUnload::on_enter() {
+  send_data();
+  previous_z_ = Core::ensure_z_enough_room();
+  return true;
+}
 
-    //! Prepare Load or Unload step #1: set the target temperature, setup the next step and display a wait message
-    //! @param background Background task to detect if it is time for step #2
-    void prepare(bool load) {
-      ReadRam frame{VAR_TEMP};
-      if(!frame.send_receive(1)) return;
-      const auto target_temp = static_cast<celsius_t>(frame.read_int());
+void LoadUnload::on_back_command() {
+  ExtUI::setAxisPosition_mm(previous_z_, ExtUI::Z, 20);
+  Parent::on_back_command();
+}
 
-      pool().load_ = load;
-      ExtUI::setTargetTemp_celsius(target_temp, ExtUI::H0, true);
-      if(ExtUI::getDefaultTemp_celsius(ExtUI::H0) != target_temp) {
-        ExtUI::setDefaultTemp_celsius(target_temp, ExtUI::H0);
-        ExtUI::saveSettings();
-      }
-
-      ExtUI::setHostKeepaliveState(GcodeSuite::IN_PROCESS);
-      auto title = load ? GET_TEXT_F(MSG_FILAMENT_CHANGE_LOAD) : GET_TEXT_F(MSG_FILAMENT_CHANGE_UNLOAD);
-      Wait::wait_back(title, GET_TEXT_F(MSG_HEATING), [] () -> void {
-        background_task.clear();
-        Status::set(GET_TEXT_F(ADVI3PP_MSG_CANCELED), Status::STATUS_OPTIONS::RESET);
-        ExtUI::setHostKeepaliveState(GcodeSuite::NOT_BUSY);
-        ExtUI::setTargetTemp_celsius(0, ExtUI::H0);
-      });
-
-      background_task.set([] () -> CALLBACK_RESULT {
-        if(ExtUI::getActualTemp_celsius(ExtUI::E0) < ExtUI::getTargetTemp_celsius(ExtUI::E0)) return CALLBACK_RESULT::CONTINUE;
-        extrude();
-        return CALLBACK_RESULT::STOP;
-      });
-    }
-
-    void extrude() {
-      Log::info() << F("extrude") << Log::endl();
-      auto load = pool().load_;
-      ExtUI::setAxisPosition_mm(
-        ExtUI::getAxisPosition_mm(ExtUI::E0) + (load ? FILAMENT_CHANGE_SLOW_LOAD_LENGTH : -FILAMENT_CHANGE_SLOW_LOAD_LENGTH),
-        ExtUI::E0,
-        load ? FILAMENT_CHANGE_SLOW_LOAD_FEEDRATE : FILAMENT_CHANGE_UNLOAD_FEEDRATE
-      );
-
-      auto title = load ? GET_TEXT_F(MSG_FILAMENT_CHANGE_LOAD) : GET_TEXT_F(MSG_FILAMENT_CHANGE_UNLOAD);
-      Wait::wait_back(title, GET_TEXT_F(ADVI3PP_MSG_IN_PROGRESS), [] () -> void {
-        background_task.clear();
-        Status::set(GET_TEXT_F(ADVI3PP_MSG_CANCELED), Status::STATUS_OPTIONS::RESET);
-        Pages::clear_temporaries();
-        ExtUI::setHostKeepaliveState(GcodeSuite::NOT_BUSY);
-        ExtUI::stopMove();
-      });
-
-      background_task.set([] () -> CALLBACK_RESULT {
-        if(ExtUI::isMoving()) return CALLBACK_RESULT::CONTINUE;
-        ExtUI::setHostKeepaliveState(GcodeSuite::NOT_BUSY);
-        Pages::clear_temporaries();
-        Status::set_default();
-        return CALLBACK_RESULT::STOP;
-      });
-    }
-
-    //! Start Load action.
-    void load_command() {
-      prepare(true);
-    }
-
-    //! Start Unload action.
-    void unload_command() {
-      prepare(false);
-    }
-
+//! Prepare Load or Unload step #1: set the target temperature, setup the next step and display a wait message
+//! @param background Background task to detect if it is time for step #2
+void LoadUnload::prepare(float length, feedRate_t feedrate) {
+  ReadRam frame{Variable::Value0};
+  if(!frame.send_receive(1)) {
+    Log::error() << F("Receiving Frame (Target Temperature)") << Log::endl();
+    return;
   }
+  const auto target_temp = frame.read_word();
+  length_ = length;
+  feedrate_ = feedrate;
+
+  ExtUI::setTargetTemp_celsius(target_temp, ExtUI::E0, true);
+  ExtUI::setDefaultTemp_celsius(target_temp, ExtUI::E0);
+  settings.save();
+
+  wait.wait_back(F("Heating the extruder..."), WaitCallback{this, &LoadUnload::cancel_heating});
+  background_task.set(Callback{this, &LoadUnload::heating_task}, 250);
+  ExtUI::setHostKeepaliveState(GcodeSuite::IN_PROCESS);
+}
+
+void LoadUnload::heating_task() {
+  if(ExtUI::getActualTemp_celsius(ExtUI::E0) < ExtUI::getTargetTemp_celsius(ExtUI::E0) - 2) return;
+  background_task.clear();
+  extrude();
+}
+
+bool LoadUnload::cancel_heating() {
+  ExtUI::setHostKeepaliveState(GcodeSuite::NOT_BUSY);
+  background_task.clear();
+  ExtUI::setTargetTemp_celsius(0, ExtUI::E0);
+  return true;
+}
+
+void LoadUnload::extrude() {
+  ExtUI::setAxisPosition_mm(ExtUI::getAxisPosition_mm(ExtUI::E0) + length_, ExtUI::E0, feedrate_);
+  wait.wait_back(length_ > 0 ? F("Load filament...") : F("Unload filament..."), WaitCallback{this, &LoadUnload::cancel_extrude});
+  background_task.set(Callback{this, &LoadUnload::extrude_task});
+}
+
+void LoadUnload::extrude_task() {
+  if(ExtUI::isMoving()) return;
+  ExtUI::setHostKeepaliveState(GcodeSuite::NOT_BUSY);
+  background_task.clear();
+  ExtUI::setTargetTemp_celsius(0, ExtUI::E0);
+  pages.clear_temporaries();
+}
+
+bool LoadUnload::cancel_extrude() {
+  ExtUI::setHostKeepaliveState(GcodeSuite::NOT_BUSY);
+  background_task.clear();
+  ExtUI::setTargetTemp_celsius(0, ExtUI::E0);
+  ExtUI::stopMove();
+  pages.clear_temporaries();
+  return false;
+}
+
+//! Start Load action.
+void LoadUnload::load_command() {
+  prepare(FILAMENT_CHANGE_SLOW_LOAD_LENGTH, FILAMENT_CHANGE_SLOW_LOAD_FEEDRATE);
+}
+
+//! Start Unload action.
+void LoadUnload::unload_command() {
+    prepare(-FILAMENT_CHANGE_UNLOAD_LENGTH, FILAMENT_CHANGE_UNLOAD_FEEDRATE);
+}
+
+
 }

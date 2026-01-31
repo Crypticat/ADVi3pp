@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,36 +20,70 @@
 
 #pragma once
 
+#include "stack.h"
 #include "enums.h"
-#include "logging.h"
 #include "task.h"
 
-namespace ADVi3pp::Pages {
-  enum class SAVE_OPTIONS { NOTHING = 0x0000, SETTINGS = 0x0001, MESSAGE = 0x0002 };
-  enum class BACK_OPTIONS { NONE = 0x0000, FINISH_MOVE = 0x0001 };
-  enum class BACK_ALL_OPTIONS { NONE = 0x0000, SHOW_MAIN = 0x0001, SEND_BACK = 0x0002 };
+namespace ADVi3pp {
 
-  void show(Page page);
-  Page get_current_page();
-  void clear_temporaries(bool show = true);
-  void clear_current();
-  void back_all(BACK_ALL_OPTIONS options);
+
+//! Display a page on top of the others; display back and forward pages
+struct Pages {
+  void show(Page page, Action action);
+  Page get_current_page() { return get_current_context().page; }
+  void clear_temporaries();
+  void go_to_print();
+  bool current_page_ensure_no_move();
+  bool check_no_print(Page page);
   void save_forward_page();
-  void save(SAVE_OPTIONS save, BACK_OPTIONS options);
-  void back(BACK_OPTIONS options);
+  void show_back_page(unsigned nb_back = 1);
+  void show_forward_page();
+  void reset();
+  void save();
+  void back();
 
-  // Temporary means it can be removed when an action is done.
-  inline bool is_temporary(Page page) {
-    return
-      page == Page::Temperatures ||
-      page == Page::SdCard ||
-      page == Page::WaitBack ||
-      page == Page::WaitBackContinue ||
-      page == Page::Wait ||
-      page == Page::WaitContinue;
+private:
+  struct Context {
+	  Page page = Page::None; 
+	  Action action = Action::None;
+	  
+	  Context(): page{Page::None}, action{Action::None} {}
+	  Context(Page page, Action action): page{page}, action{action} {}
+  };
+
+  static void save_task();
+  static void back_task();
+  Context get_current_context();
+  void send_page_to_lcd(Context context);
+  static bool is_temporary(Page page);
+  static bool ensure_no_move(Page page);
+
+  friend inline Log& operator<<(Log& log, Pages::Context context) {
+    log << "(P:" << static_cast<uint16_t>(context.page) << "A:" << static_cast<uint16_t>(context.action) << ")";
+    return log;
   }
+
+private:
+  static constexpr size_t STACK_SIZE = 8;
+
+  Stack<Context, STACK_SIZE> back_{};
+  Context forward_ = Context(Page::None, Action::None);
+  Context current_ = Context{Page::Main, Action::None};
+};
+
+inline bool Pages::is_temporary(Page page) {
+  return test_one_bit(page, Page::Temporary);
 }
 
-ENABLE_BITMASK_OPERATOR(ADVi3pp::Pages::SAVE_OPTIONS);
-ENABLE_BITMASK_OPERATOR(ADVi3pp::Pages::BACK_OPTIONS);
-ENABLE_BITMASK_OPERATOR(ADVi3pp::Pages::BACK_ALL_OPTIONS);
+inline bool Pages::ensure_no_move(Page page) {
+  return test_one_bit(page, Page::ExitFinishMove);
+}
+
+inline bool Pages::current_page_ensure_no_move() {
+  return ensure_no_move(get_current_page());
+}
+
+
+extern Pages pages;
+
+}

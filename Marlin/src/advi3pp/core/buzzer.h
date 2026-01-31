@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,11 +21,12 @@
 #pragma once
 
 #include <stdint.h>
-#include "../../lcd/extui/ui_api.h"
+#include "settings.h"
 
-namespace ADVi3pp::Buzzer {
+namespace ADVi3pp {
 
-  enum class OPTIONS: uint8_t {
+struct Buzzer: Settings<Buzzer> {
+  enum class OPTIONS: uint16_t {
     NONE = 0,
     ON_TOUCH = 1,
     ON_ACTION = 1 << 1
@@ -36,7 +37,22 @@ namespace ADVi3pp::Buzzer {
   void buzz_on_action(uint8_t duration);
   void buzz_on_press();
 
-  inline bool is_option_enabled(OPTIONS option) {
-    return (ui.sound_on & static_cast<uint16_t>(option)) != 0;
+  bool is_option_enabled(OPTIONS option) {
+    return (ui.tone_options & static_cast<uint16_t>(option)) != 0;
   }
+
+private:
+  friend Parent;
+
+private:
+    void send_buzz_command_to_lcd();
+    void send_buzz_command_to_lcd(uint8_t duration);
+
+private:
+  bool buzz_on_action_ = true;
+  bool buzz_on_press_ = false;
+};
+
+extern Buzzer buzzer;
+
 }

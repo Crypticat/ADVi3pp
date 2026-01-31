@@ -87,7 +87,7 @@ static void event_handler(lv_obj_t *obj, lv_event_t event) {
       break;
     case ID_FILAMNT_TYPE:
       #if HAS_MULTI_EXTRUDER
-        FLIP(uiCfg.extruderIndex);
+        uiCfg.extruderIndex = !uiCfg.extruderIndex;
       #endif
       disp_filament_type();
       break;

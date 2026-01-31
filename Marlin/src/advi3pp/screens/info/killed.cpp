@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,15 +22,18 @@
 #include "../../core/dgus.h"
 #include "killed.h"
 
-namespace ADVi3pp::Killed {
+namespace ADVi3pp {
 
-  inline namespace internals {
-    constexpr size_t COMPONENT_LENGTH = 32;
-  }
+Killed killed_page;
 
-  void show(const FlashChar* component) {
-    if(component != nullptr) WriteRamRequest{Variable::LongText0}.write_text(component, COMPONENT_LENGTH);
-    Pages::show(Page::Killed);
+void Killed::show(float temp, const FlashChar* component) {
+  if(component != nullptr) {
+    ADVString<48> message{component};
+    if(!isnan(temp))
+      message.append(' ').append(temp).append('C');
+    WriteRamRequest{Variable::LongText0}.write_text(message);
   }
+  Parent::show();
+};
 
 }

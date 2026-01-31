@@ -21,31 +21,16 @@
  */
 #include "../../inc/MarlinConfig.h"
 
-#if ENABLED(EDITABLE_DISPLAY_TIMEOUT)
+#if HAS_GCODE_M255
 
 #include "../gcode.h"
 #include "../../lcd/marlinui.h"
 
 /**
  * M255: Set the LCD sleep timeout (in minutes)
- *  E<bool> - Enable or disable (@advi3++)
  *  S<minutes> - Period of inactivity required for display / backlight sleep
  */
 void GcodeSuite::M255() {
-  bool report = true; // @advi3++
-
-  // @advi3++
-  if (parser.seenval('E')) {
-    ui.sleep_timeout_enabled = parser.value_bool();
-    report = false;
-  }
-
-  // @advi3++
-  if (parser.seenval('B')) {
-    ui.sleep_timeout_brightness = parser.value_ushort();
-    report = false;
-  }
-
   if (parser.seenval('S')) {
     const int m = parser.value_int();
     #if HAS_DISPLAY_SLEEP
@@ -53,23 +38,17 @@ void GcodeSuite::M255() {
     #else
       ui.backlight_timeout_minutes = constrain(m, ui.backlight_timeout_min, ui.backlight_timeout_max);
     #endif
-      report = false; // @advi3++
   }
-
-  if(report) M255_report(); // @advi3++
+  else
+    M255_report();
 }
 
 void GcodeSuite::M255_report(const bool forReplay/*=true*/) {
-  TERN_(MARLIN_SMALL_BUILD, return);
   report_heading_etc(forReplay, F(STR_DISPLAY_SLEEP));
   SERIAL_ECHOLNPGM("  M255 S",
     TERN(HAS_DISPLAY_SLEEP, ui.sleep_timeout_minutes, ui.backlight_timeout_minutes),
-    " E",  // @advi3++
-    ui.sleep_timeout_enabled ? 1 : 0, // @advi3++
-    " B", // @advi3++
-    ui.sleep_timeout_brightness, // @advi3++
     " ; (minutes)"
   );
 }
 
-#endif // EDITABLE_DISPLAY_TIMEOUT
+#endif // HAS_GCODE_M255

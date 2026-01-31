@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,10 +20,61 @@
 
 #pragma once
 
-#if ENABLED(ADVi3PP_PROBE)
+#include "../../core/screen.h"
 
-namespace ADVi3pp::SensorZHeight {
-  bool handle_command(uint16_t key_code);
-}
+namespace ADVi3pp {
+
+#ifdef ADVi3PP_PROBE
+//! Sensor Z Height Tuning Page
+struct SensorZHeight: Screen<SensorZHeight> {
+  static constexpr Page PAGE = Page::ZHeightTuning;
+  static constexpr Action ACTION = Action::ZHeightTuning;
+
+  void minus();
+  void plus();
+
+  enum class Multiplier: uint8_t {
+      M1 = 0,
+      M2 = 1,
+      M3 = 2
+  };
+
+private:
+  bool on_dispatch(KeyValue key_value);
+  bool on_enter();
+  void on_save_command();
+  void on_back_command();
+  void on_abort();
+  bool on_homed();
+
+  void multiplier1_command();
+  void multiplier2_command();
+  void multiplier3_command();
+  double get_multiplier_value() const;
+  void adjust_height(double offset);
+  void send_data() const;
+  void reset();
+
+private:
+  Multiplier multiplier_ = Multiplier::M1;
+  float old_offset_ = 0;
+  millis_t last_click_time_ = 0;
+  friend Parent;
+};
+
+#else
+
+//! Sensor Z Height Tuning Page
+struct SensorZHeight: Screen<SensorZHeight> {
+  static constexpr Page PAGE = Page::NoSensor;
+  static constexpr Action ACTION = Action::ZHeightTuning;
+
+  void minus() {}
+  void plus() {}
+};
 
 #endif
+
+extern SensorZHeight sensor_z_height;
+
+}

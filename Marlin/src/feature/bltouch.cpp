@@ -29,7 +29,7 @@
 BLTouch bltouch;
 
 bool BLTouch::od_5v_mode;         // Initialized by settings.load, 0 = Open Drain; 1 = 5V Drain
-#if HAS_BLTOUCH_HS_MODE
+#ifdef BLTOUCH_HS_MODE
   bool BLTouch::high_speed_mode;  // Initialized by settings.load, 0 = Low Speed; 1 = High Speed
 #else
   constexpr bool BLTouch::high_speed_mode;
@@ -37,7 +37,7 @@ bool BLTouch::od_5v_mode;         // Initialized by settings.load, 0 = Open Drai
 
 // @advi3++ will not force but will allow to use this feature
 #ifdef BLTOUCH_ALLOW_SW_MODE
-  bool BLTouch::sw_mode;
+  bool BLTouch::touch_sw_mode;
 #else
   constexpr bool BLTouch::touch_sw_mode;
 #endif
@@ -79,9 +79,13 @@ void BLTouch::init(const bool set_voltage/*=false*/) {
   #else
 
     #ifdef DEBUG_OUT
-      if (DEBUGGING(LEVELING))
-        DEBUG_ECHOLN( F("BLTouch Mode: "), bltouch.od_5v_mode ? F("5V") : F("OD"),
-                      F(" (Default " TERN(BLTOUCH_SET_5V_MODE, "5V", "OD") ")"));
+      if (DEBUGGING(LEVELING)) {
+        PGMSTR(mode0, "OD");
+        PGMSTR(mode1, "5V");
+        DEBUG_ECHOPGM("BLTouch Mode: ");
+        DEBUG_ECHOPGM_P(bltouch.od_5v_mode ? mode1 : mode0);
+        DEBUG_ECHOLNPGM(" (Default " TERN(BLTOUCH_SET_5V_MODE, "5V", "OD") ")");
+      }
     #endif
 
     const bool should_set = od_5v_mode != ENABLED(BLTOUCH_SET_5V_MODE);
@@ -126,7 +130,7 @@ bool BLTouch::deploy_proc() {
   // One of the recommended ANTClabs ways to probe, using SW MODE
   // @advi3++ will not force but will allow to use this feature
   #ifdef BLTOUCH_ALLOW_SW_MODE
-  if(sw_mode) _set_SW_mode();
+  if(touch_sw_mode) _set_SW_mode();
   #endif
 
   // Now the probe is ready to issue a 10ms pulse when the pin goes up.

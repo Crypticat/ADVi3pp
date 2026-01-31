@@ -26,12 +26,13 @@
 
 namespace adv {
 
-  // From https://en.cppreference.com/w/cpp/container/array
-  // C++14 because C++17 or higher currently not supported by avr-gcc
-  // Since Exception are not supported, at and similar functions are not checking their arguments
+// From https://en.cppreference.com/w/cpp/container/array
+// C++14 because C++17 or higher currently not supported by avr-gcc
+// Since Exception are not supported, at and similar functions are not checking their arguments
 
-  template<typename T, size_t N>
-  struct array_const_iterator_ {
+template<typename T, size_t N>
+struct array_const_iterator_
+{
     using iterator_category = random_access_iterator_tag;
     using value_type        = T;
     using difference_type   = ptrdiff_t;
@@ -65,14 +66,15 @@ namespace adv {
     bool operator<=(const array_const_iterator_& right) const noexcept      { return !(right < *this); }
     bool operator>=(const array_const_iterator_& right) const noexcept      { return !(*this < right); }
 
-  private:
+private:
     pointer ptr_;
     size_t index_;
-  };
+};
 
 
-  template<typename T, size_t N>
-  struct array_iterator_ {
+template<typename T, size_t N>
+struct array_iterator_
+{
     using iterator_category = random_access_iterator_tag;
     using value_type        = T;
     using difference_type   = ptrdiff_t;
@@ -106,14 +108,16 @@ namespace adv {
     bool operator<=(const array_iterator_& right) const noexcept            { return !(right < *this); }
     bool operator>=(const array_iterator_& right) const noexcept            { return !(*this < right); }
 
-  private:
+private:
     pointer ptr_;
     size_t index_;
-  };
+};
 
 
-  template<typename T, size_t N>
-  struct array {
+
+template<typename T, size_t N>
+struct array
+{
     using value_T                   = T;
     using size_type                 = size_t;
     using difference_type           = ptrdiff_t;
@@ -127,103 +131,103 @@ namespace adv {
     using const_reverse_iterator    = adv::reverse_iterator<const_iterator>;
 
     // Element access
-    [[nodiscard]] reference at(size_type pos)                                 { return elements_[pos]; } // WARNING: No check
-    [[nodiscard]] constexpr const_reference at(size_type pos) const           { return elements_[pos]; } // WARNING: No check
-    [[nodiscard]] reference operator[](size_type pos)                         { return elements_[pos]; }
-    [[nodiscard]] constexpr const_reference operator[](size_type pos) const   { return elements_[pos]; }
-    [[nodiscard]] reference front()                                           { return elements_[0]; }
-    [[nodiscard]] constexpr const_reference front() const                     { return elements_[0]; }
-    [[nodiscard]] reference back()                                            { return elements_[N - 1]; }
-    [[nodiscard]] constexpr const_reference back() const                      { return elements_[N - 1]; }
-    [[nodiscard]] T* data() noexcept                                          { return elements_; }
-    [[nodiscard]] constexpr const T* data() const noexcept                    { return elements_; }
+    reference at(size_type pos)                                 { return elements_[pos]; } // WARNING: No check
+    constexpr const_reference at(size_type pos) const           { return elements_[pos]; } // WARNING: No check
+    reference operator[](size_type pos)                         { return elements_[pos]; }
+    constexpr const_reference operator[](size_type pos) const   { return elements_[pos]; }
+    reference front()                                           { return elements_[0]; }
+    constexpr const_reference front() const                     { return elements_[0]; }
+    reference back()                                            { return elements_[N - 1]; }
+    constexpr const_reference back() const                      { return elements_[N - 1]; }
+    T* data() noexcept                                          { return elements_; }
+    constexpr const T* data() const noexcept                    { return elements_; }
 
     // Iterators
-    [[nodiscard]] iterator begin() noexcept                                   { return iterator(elements_, 0); }
-    [[nodiscard]] constexpr const_iterator begin() const noexcept             { return const_iterator(elements_, 0); }
-    [[nodiscard]] constexpr const_iterator cbegin() const noexcept            { return begin(); }
-    [[nodiscard]] iterator end() noexcept                                     { return iterator(elements_, N); }
-    [[nodiscard]] constexpr const_iterator end() const noexcept               { return const_iterator(elements_, N); }
-    [[nodiscard]] constexpr const_iterator cend() const noexcept              { return end(); }
-    [[nodiscard]] reverse_iterator rbegin() noexcept                          { return reverse_iterator(end()); }
-    [[nodiscard]] constexpr const_reverse_iterator rbegin() const noexcept    { return const_reverse_iterator(end()); }
-    [[nodiscard]] constexpr const_reverse_iterator crbegin() const noexcept   { return rbegin(); }
-    [[nodiscard]] reverse_iterator rend() noexcept                            { return reverse_iterator(begin()); }
-    [[nodiscard]] constexpr const_reverse_iterator rend() const noexcept      { return const_reverse_iterator(begin()); }
-    [[nodiscard]] constexpr const_reverse_iterator crend() const noexcept     { return rend(); }
+    iterator begin() noexcept                                   { return iterator(elements_, 0); }
+    constexpr const_iterator begin() const noexcept             { return const_iterator(elements_, 0); }
+    constexpr const_iterator cbegin() const noexcept            { return begin(); }
+    iterator end() noexcept                                     { return iterator(elements_, N); }
+    constexpr const_iterator end() const noexcept               { return const_iterator(elements_, N); }
+    constexpr const_iterator cend() const noexcept              { return end(); }
+    reverse_iterator rbegin() noexcept                          { return reverse_iterator(end()); }
+    constexpr const_reverse_iterator rbegin() const noexcept    { return const_reverse_iterator(end()); }
+    constexpr const_reverse_iterator crbegin() const noexcept   { return rbegin(); }
+    reverse_iterator rend() noexcept                            { return reverse_iterator(begin()); }
+    constexpr const_reverse_iterator rend() const noexcept      { return const_reverse_iterator(begin()); }
+    constexpr const_reverse_iterator crend() const noexcept     { return rend(); }
 
     // Capacity
-    [[nodiscard]] constexpr bool empty() const noexcept                       { return false; }
-    [[nodiscard]] constexpr size_type size() const noexcept                   { return N; }
-    [[nodiscard]] constexpr size_type max_size() const noexcept               { return N; }
+    constexpr bool empty() const noexcept                       { return false; }
+    constexpr size_type size() const noexcept                   { return N; }
+    constexpr size_type max_size() const noexcept               { return N; }
 
     // Operations
     void fill(const T& value);
     void swap(array& other) noexcept(noexcept(swap(adv::declval<T&>(), adv::declval<T&>())));
 
     T elements_[N ? N : 1];
-  };
+};
 
 
-  // Implementations
+// Implementations
 
-  template<typename T, size_t N>
-  void array<T, N>::fill(const T& value)
-  {
-      for(size_t i = 0; i < N; ++i)
-          elements_[i] = value;
-  }
+template<typename T, size_t N>
+void array<T, N>::fill(const T& value)
+{
+    for(size_t i = 0; i < N; ++i)
+        elements_[i] = value;
+}
 
-  template<typename T, size_t N>
-  void array<T, N>::swap(array& other) noexcept(noexcept(swap(adv::declval<T&>(), adv::declval<T&>())))
-  {
-      for(size_t i = 0; i < N; ++i)
-          adv::swap(elements_[i], other.elements_[i]);
-  }
+template<typename T, size_t N>
+void array<T, N>::swap(array& other) noexcept(noexcept(swap(adv::declval<T&>(), adv::declval<T&>())))
+{
+    for(size_t i = 0; i < N; ++i)
+        adv::swap(elements_[i], other.elements_[i]);
+}
 
-  // Non-member functions
+// Non-member functions
 
-  template<typename T, size_t N>
-  constexpr bool operator==(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
+template<typename T, size_t N>
+constexpr bool operator==(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
 
-  template<typename T, size_t N>
-  constexpr bool operator!=(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
+template<typename T, size_t N>
+constexpr bool operator!=(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
 
-  template<typename T, size_t N>
-  constexpr bool operator<(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
+template<typename T, size_t N>
+constexpr bool operator<(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
 
-  template<typename T, size_t N>
-  constexpr bool operator<=(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
+template<typename T, size_t N>
+constexpr bool operator<=(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
 
-  template<typename T, size_t N>
-  constexpr bool operator>(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
+template<typename T, size_t N>
+constexpr bool operator>(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
 
-  template<typename T, size_t N>
-  constexpr bool operator>=(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
+template<typename T, size_t N>
+constexpr bool operator>=(const adv::array<T, N>& lhs, const adv::array<T, N>& rhs);
 
-  // Helper classes
-  template<typename T, size_t N>
-  struct tuple_size<adv::array<T, N>>: adv::integral_constant<size_t, N> {};
+// Helper classes
+template<typename T, size_t N>
+struct tuple_size<adv::array<T, N>>: adv::integral_constant<size_t, N> {};
 
-  template<size_t I, typename T, size_t N>
-  struct tuple_element<I, adv::array<T, N>>
-  {
-      using type = T;
-  };
+template<size_t I, typename T, size_t N>
+struct tuple_element<I, adv::array<T, N>>
+{
+    using type = T;
+};
 
-  template<size_t I, typename T, size_t N>
-  constexpr T& get(adv::array<T, N>& a) noexcept          { return a.elements_[I]; }
+template<size_t I, typename T, size_t N>
+constexpr T& get(adv::array<T, N>& a) noexcept          { return a.elements_[I]; }
 
-  template<size_t I, typename T, size_t N>
-  constexpr const T& get(const array<T, N>& a) noexcept   { return a.elements_[I]; }
+template<size_t I, typename T, size_t N>
+constexpr const T& get(const array<T, N>& a) noexcept   { return a.elements_[I]; }
 
-  template<size_t I, typename T, size_t N>
-  constexpr T&& get(array<T, N>&& a) noexcept             { return adv::move(a.elements_[I]); }
+template<size_t I, typename T, size_t N>
+constexpr T&& get(array<T, N>&& a) noexcept             { return adv::move(a.elements_[I]); }
 
-  template<size_t I, typename T, size_t N>
-  constexpr const T&& get(const array<T, N>&& a) noexcept { return adv::move(a.elements_[I]); }
+template<size_t I, typename T, size_t N>
+constexpr const T&& get(const array<T, N>&& a) noexcept { return adv::move(a.elements_[I]); }
 
-  template<typename T, size_t N>
-  void swap(adv::array<T, N>& lhs, adv::array<T, N>& rhs);
+template<typename T, size_t N>
+void swap(adv::array<T, N>& lhs, adv::array<T, N>& rhs);
 
 }

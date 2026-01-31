@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,18 +22,42 @@
 
 #include <stdint.h>
 #include "flash_char.h"
-#include "../lib/ADVstd/bitmasks.h"
 #include "string.h"
-#include "task.h"
 
-namespace ADVi3pp::Status {
-  enum class STATUS_OPTIONS { NONE = 0x0000, RESET = 0x0001, PERSISTENT = 0x0002};
+namespace ADVi3pp {
 
-  void set(const char* message, STATUS_OPTIONS options = STATUS_OPTIONS::NONE);
-  void set(FSTR_P message, STATUS_OPTIONS options = STATUS_OPTIONS::NONE);
-  void set_default();
+const size_t message_length = 48; //!< Size of messages to be displayed on the LCD Panel
+const size_t filename_length = 48; //!< Size of the progress name (i.e. filename) to be displayed on the LCD Panel
+const size_t progress_text_length = 48; //!< Size of the progress message (filename and percent) to be displayed on the LCD Panel
+const size_t progress_percent_length = 8; //!< Size of the progress percent text to be displayed on the LCD Panel
+const size_t tc_length = 8; //!< Size of the time to complete message to be displayed on the LCD Panel
+const size_t et_length = 8; //!< Size of the elaplsed time message to be displayed on the LCD Panel
+
+struct Status {
   void reset();
-  void init();
-}
+  void reset_and_clear();
+  void set(const FlashChar* message);
+  void set(const char* message);
+  void format(const FlashChar* fmt, va_list& args);
+  void format(const FlashChar* fmt, ...);
+  bool has() const;
 
-ENABLE_BITMASK_OPERATOR(ADVi3pp::Status::STATUS_OPTIONS);
+  void send();
+  void set_filename(const char* name);
+  void reset_progress();
+
+private:
+  void send_progress();
+  void send_times();
+  void send_status(ADVString<message_length>& message);
+
+private:
+  bool has_status_ = false;
+  ADVString<filename_length> filename_;
+  int percent_ = -1;
+  uint32_t next_update_times_time_ = 0;
+};
+
+extern Status status;
+
+}

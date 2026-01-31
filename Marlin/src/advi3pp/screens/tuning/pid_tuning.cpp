@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,143 +19,148 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-#include "../../core/dgus.h"
-#include "../../core/core.h"
-#include "../../core/status.h"
-#include "../../core/progress.h"
-#include "../../core/pool.h"
-#include "../print/temperatures.h"
 #include "pid_tuning.h"
+#include "../../core/core.h"
+#include "../../core/dgus.h"
+#include "../../core/pid.h"
+#include "../../core/status.h"
+#include "../settings/pid_settings.h"
+#include "../print/temperatures.h"
 
-namespace ADVi3pp::PidTuning {
-  enum class State: uint8_t {
-    None,
-    Processing,
-    FromLCDMenu = 0x80
-  };
-}
-ENABLE_BITMASK_OPERATOR(ADVi3pp::PidTuning::State);
+namespace ADVi3pp {
 
-namespace ADVi3pp::PidTuning {
-  inline namespace internals {
+PidTuning pid_tuning;
 
-    constexpr uint16_t KEY_CODE_STEP2 = 1;
-    constexpr uint16_t KEY_CODE_BED = 2;
-    constexpr uint16_t KEY_CODE_EXTRUDER = 3;
-    constexpr Variable VAR_TEMP = Variable::Value0;
-    constexpr Variable VAR_HEATER = Variable::Value1;
-
-    // Can't be stored in the Pool because of is_running that is called any time.
-    State state_ = State::None;
-    bool bed_ = false;
-
-    void show_command();
-    void step2_command();
-    void heater_command(bool bed);
-
-    void set_message(ExtUI::pidresult_t result);
-  }
-
-  RUNNING is_running() {
-    return !test_one_bit(state_, State::Processing) ? RUNNING::NO : bed_ ? RUNNING::BED : RUNNING::EXTRUDER;
-  }
-
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: show_command(); break;
-      case KEY_CODE_BACK: Pages::back(Pages::BACK_OPTIONS::NONE); break;
-      case KEY_CODE_STEP2: step2_command(); break;
-      case KEY_CODE_EXTRUDER: heater_command(false); break;
-      case KEY_CODE_BED: heater_command(true); break;
-      default: return false;
-    }
+//! Handle PID tuning command
+//! @param key_value    The step of the PID tuning
+//! @return             True if the action was handled
+bool PidTuning::on_dispatch(KeyValue key_value) {
+  if(Parent::on_dispatch(key_value))
     return true;
+
+  switch(key_value) {
+    case KeyValue::PidTuningStep2:  step2_command(); break;
+    case KeyValue::PidTuningHotend: hotend_command(); break;
+    case KeyValue::PidTuningBed:    bed_command(); break;
+    default:                        return false;
   }
 
-  void on_start(bool bed) {
-    Status::set(GET_TEXT_F(ADVI3PP_MSG_PID_TUNING_START), Status::STATUS_OPTIONS::RESET);
-    state_ |= State::Processing;
-    bed_ = bed;
+  return true;
+}
+
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool PidTuning::on_enter() {
+  pages.save_forward_page();
+  hotend_command();
+  status.reset();
+  return true;
+}
+
+//! Send the current data to the LCD panel.
+void PidTuning::send_data() {
+  WriteRamRequest{Variable::Value0}.write_words(temperature_, kind_ != TemperatureKind::Hotend);
+}
+
+//! Select the hotend PID
+void PidTuning::hotend_command() {
+  temperature_ = static_cast<uint16_t>(ExtUI::getDefaultTemp_celsius(ExtUI::E0));
+  kind_ = TemperatureKind::Hotend;
+  send_data();
+}
+
+//! Select the bed PID
+void PidTuning::bed_command() {
+  temperature_ = static_cast<uint16_t>(ExtUI::getDefaultTemp_celsius(ExtUI::BED));
+  kind_ = TemperatureKind::Bed;
+  send_data();
+}
+
+//! Show step #2 of PID tuning
+void PidTuning::step2_command() {
+  status.reset();
+
+  ReadRam frame{Variable::Value0};
+  if(!frame.send_receive(2)) {
+    Log::error() << F("Receiving Frame (Target Temperature)") << Log::endl();
+    return;
   }
 
-  void on_progress(int cycle, int nb) {
-    Log::info() << F("ExtUI::on_progress") << cycle << nb << Log::endl();
-    Progress::set(cycle * 100 / nb);
+  temperature_ = frame.read_word();
+  [[maybe_unused]] uint16_t  kind = frame.read_word();
+  assert(static_cast<TemperatureKind>(kind) == kind_);
+
+  state_ |= State::FromLCDMenu;
+
+  if(kind_ == TemperatureKind::Hotend)
+    ExtUI::setTargetFan_percent(100, ExtUI::FAN0); // Turn on fan (only for hotend)
+
+  background_task.set(Callback{this, &PidTuning::step3_command});
+}
+
+void PidTuning::step3_command() {
+  background_task.clear();
+
+  temperatures.show(Callback{this, &PidTuning::cancel_pid});
+
+  if(kind_ == TemperatureKind::Hotend) {
+    ExtUI::startPIDTune(temperature_, ExtUI::E0);
+    ExtUI::setDefaultTemp_celsius(temperature_, ExtUI::E0);
+  }
+  else {
+    ExtUI::startBedPIDTune(temperature_);
+    ExtUI::setDefaultTemp_celsius(temperature_, ExtUI::BED);
+  }
+}
+
+//! Cancel PID process.
+void PidTuning::cancel_pid() {
+  status.set(F("Canceling PID tuning"));
+  ExtUI::cancelWaitForHeatup();
+  ExtUI::setTargetFan_percent(0, ExtUI::FAN0);
+  state_ = State::None;
+}
+
+void PidTuning::on_start() {
+  status.set(F("Starting PID tuning..."));
+  state_ |= State::Processing;
+}
+
+void PidTuning::on_progress(int cycle, int nb) {
+  ADVString<18> format{F("PID tuning %i / %i")};
+  ADVString<18> progress{};
+  progress.format(format.get(), cycle, nb);
+  status.set(progress.get());
+}
+
+const FlashChar* get_message(ExtUI::result_t result) {
+  switch(result) {
+    case ExtUI::PID_BAD_EXTRUDER_NUM:   return F(STR_PID_BAD_HEATER_ID);
+    case ExtUI::PID_TEMP_TOO_HIGH:      return F(STR_PID_TEMP_TOO_HIGH);
+    case ExtUI::PID_TUNING_TIMEOUT:     return F(STR_PID_TIMEOUT);
+    case ExtUI::PID_DONE:               return F("PID tuning successful");
+    default: Log::error() << F("Unknown result_t ") << static_cast<uint16_t>(result) << Log::endl(); break;
   }
 
-  //! PID automatic tuning is finished.
-  void on_finished(ExtUI::pidresult_t result) {
-    if((state_ & ~State::FromLCDMenu) != State::Processing) return;
-    state_ = State::None;
-    set_message(result);
-    ExtUI::setTargetFan_percent(0, ExtUI::FAN0);
-    Progress::set_animation(false);
-    Progress::reset();
-    if(result != ExtUI::PID_DONE) return;
-    Core::display(Page::PidSettings, Core::DISPLAY_OPTIONS::NONE, bed_);
-  }
+  return F("");
+}
 
-  inline namespace internals {
+//! PID automatic tuning is finished.
+void PidTuning::on_finished(ExtUI::result_t result) {
+  if((state_ & ~State::FromLCDMenu) != State::Processing)
+    return;
+  state_ = State::None;
 
-    void show_command() {
-      if(!Core::check_not_busy()) return;
-      Status::reset();
-      Pages::save_forward_page();
-      WriteRamRequest{VAR_TEMP}.write_words(static_cast<uint16_t>(ExtUI::getDefaultTemp_celsius(ExtUI::H0)), 0);
-      Pages::show(Page::PidTuning);
-    }
+  auto message = get_message(result);
+  status.set(message);
 
-    adv::tuple<bool, celsius_t> save_temperature() {
-      ReadRam frame{VAR_TEMP};
-      if(!frame.send_receive(2)) return adv::make_tuple(false, static_cast<celsius_t>(0));
-      auto temperature = static_cast<celsius_t>(frame.read_uint());
-      bool bed = frame.read_bool();
-      ExtUI::setDefaultTemp_celsius(temperature, bed ? ExtUI::BED : ExtUI::H0);
-      return adv::make_tuple(bed, temperature);
-    }
+  ExtUI::setTargetFan_percent(0, ExtUI::FAN0);
+  if(result != ExtUI::PID_DONE)
+    return;
 
-    void heater_command(bool bed) {
-      save_temperature();
-      auto temperature = static_cast<uint16_t>(ExtUI::getDefaultTemp_celsius(bed ? ExtUI::BED : ExtUI::H0));
-      WriteRamRequest{VAR_TEMP}.write_words(temperature, bed);
-    }
+  pid.add_pid(kind_, temperature_);
+  pid_settings.show();
+}
 
-    //! Show step #2 of PID tuning
-    void step2_command() {
-      state_ |= State::FromLCDMenu;
-      if(!bed_)
-        ExtUI::setTargetFan_percent(100, ExtUI::FAN0); // Turn on fan (only for extruder PID)
 
-      auto values= save_temperature();
-      auto bed = adv::get<0>(values);
-      auto temperature = adv::get<1>(values);
-
-      Progress::reset();
-      Progress::set_animation(true);
-
-      Temperatures::display([] () -> void {
-        Log::info() << F("Cancel PID tuning") << Log::endl();
-        Status::set(GET_TEXT_F(ADVI3PP_MSG_PID_TUNING_CANCEL), Status::STATUS_OPTIONS::RESET);
-        ExtUI::cancelWaitForHeatup();
-        ExtUI::setTargetFan_percent(0, ExtUI::FAN0);
-        state_ = State::None;
-      });
-      // startPIDTune will enter a loop and thus will call idle from idle
-      if(bed)
-        ExtUI::startBedPIDTune(temperature);
-      else
-        ExtUI::startPIDTune(temperature, ExtUI::E0);
-    }
-
-    void set_message(ExtUI::pidresult_t result) {
-      switch(result) {
-        case ExtUI::PID_BAD_HEATER_ID:        break; // Never happens
-        case ExtUI::PID_TEMP_TOO_HIGH:        Status::set(GET_TEXT_F(ADVI3PP_MSG_TEMP_TOO_HIGH), Status::STATUS_OPTIONS::RESET); break;
-        case ExtUI::PID_TUNING_TIMEOUT:       Status::set(GET_TEXT_F(ADVI3PP_MSG_TIMEOUT), Status::STATUS_OPTIONS::RESET); break;
-        case ExtUI::PID_DONE:                 Status::set(GET_TEXT_F(ADVI3PP_MSG_PID_TUNING_SUCCESS), Status::STATUS_OPTIONS::RESET); break;
-        default: Log::error() << F("Unknown result_t ") << static_cast<uint16_t>(result) << Log::endl(); break;
-      }
-    }
-
-  }
 }

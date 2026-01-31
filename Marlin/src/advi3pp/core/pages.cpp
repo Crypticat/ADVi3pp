@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,177 +19,164 @@
  */
 
 #include "../../inc/MarlinConfig.h"
-#include "../../lcd/extui/ui_api.h"
 #include "dgus.h"
-#include "core.h"
-#include "stack.h"
-#include "task.h"
-#include "status.h"
-#include "progress.h"
-#include "../screens/common/wait.h"
 #include "pages.h"
+#include "core.h"
+#include "settings.h"
+#include "wait.h"
 
-namespace ADVi3pp::Pages {
+namespace ADVi3pp {
 
-  inline namespace internals {
-    constexpr size_t STACK_SIZE = 8; // Does not include Main
+Pages pages;
 
-    Stack<Page, STACK_SIZE> back_{};
-    Page forward_ = Page::None;
-    Page current_ = Page::Main;
+inline Log& operator<<(Log& log, Page page) {
+  log << static_cast<uint16_t>(page);
+  return log;
+}
 
-    void send_page_to_lcd(Page page);
-    void reset_forward();
+inline Log& operator<<(Log& log, Action action) {
+  log << static_cast<uint16_t>(action);
+  return log;
+}
+
+//! Show the given page on the LCD screen
+//! @param [in] page The page to be displayed on the LCD screen
+void Pages::show(Page page, Action action) {
+  Log::log() << F("show") << page << action << Log::endl();
+  auto current = get_current_context();
+  // Don't push temporary screens or Main (Main is implicitly always at the top)
+  if(!is_temporary(current.page) && current.page != Page::Main)
+    back_.push(current);
+
+  send_page_to_lcd(Context{page, action});
+}
+
+void Pages::send_page_to_lcd(Context context) {
+  Log::log() << F("Display page") << static_cast<double>(context.page & Page::PageNumber) << Log::endl();
+  WriteRegisterRequest{Register::PictureID}.write_page(context.page & Page::PageNumber);
+  current_ = context;
+}
+
+//! Retrieve the current page on the LCD screen
+Pages::Context Pages::get_current_context() {
+  // Boot page switches automatically (animation) to the Main page
+	if(current_.page == Page::None || current_.page == Page::Boot)
+    current_= Context{Page::Main, Action::Controls};
+  return current_;
+}
+
+//! Set page to display after the completion of an operation.
+void Pages::save_forward_page() {
+  forward_ = get_current_context();
+}
+
+//! Show the "Back" page on the LCD display.
+void Pages::show_back_page(unsigned nb_back) {
+  Context context{Page::Main, Action::Controls};
+
+  for(; nb_back > 0; --nb_back) {
+    if (back_.is_empty())
+      break;
+
+    context = back_.pop();
+    if (context.page == forward_.page)
+      forward_ = Context{Page::None, Action::None};
   }
 
-  //! Show the given page on the LCD screen
-  //! @param [in] page The page to be displayed on the LCD screen
-  void show(Page page) {
-    Log::verbose() << F("Pages::show") << page << Log::endl();
+  send_page_to_lcd(context);
+}
 
-    auto current = get_current_page();
-    Log::verbose() << F("Current page:") << current << Log::endl();
-    // Do nothing if it is already the current page
-    if(current != Page::Main && page == current) return;
-    // Don't push Main or None (Main is implicitly always at the top)
-    if(current != Page::Main && current != Page::None)
-      back_.push(current);
-
-    Log::verbose() << F("back pages:") << back_ << Log::endl();
-    send_page_to_lcd(page);
+//! Show the "Next" page on the LCD display.
+void Pages::show_forward_page() {
+  // If no forward page defined, use the back page
+  if(forward_.page == Page::None) {
+    show_back_page();
+    return;
   }
 
-  //! Set page to display after the completion of an operation.
-  void save_forward_page() {
-    forward_ = get_current_page();
-    Log::verbose() << F("Pages::save_forward_page") << forward_ << Log::endl();
-  }
-
-  //! Show the "Back" page on the LCD display.
-  void show_back_page() {
-    Log::verbose() << F("Pages::show_back_page") << Log::endl();
-
-    if(back_.is_empty()) {
-      Log::verbose() << F("Empty pages stack, show Main") << Log::endl();
-      send_page_to_lcd(Page::Main);
+  while(!back_.is_empty()) {
+    auto back = back_.pop();
+    if(back.page == forward_.page) {
+      send_page_to_lcd(forward_);
+      forward_ = Context{Page::None, Action::None};
       return;
     }
-
-    auto page = back_.pop();
-    Log::verbose() << F("Current Page:") << page << F("back pages:") << back_ << Log::endl();
-    send_page_to_lcd(page);
   }
 
-  //! Show the "Next" page on the LCD display.
-  void show_forward_page() {
-    Log::verbose() << F("Pages::show_forward_page") << Log::endl();
-    // If no forward page defined, use the back page
-    if(forward_ == Page::None) {
-      show_back_page();
-      return;
-    }
+  Log::error() << F("Back pages do not contain page") << forward_.page << Log::endl();
+  forward_ = Context{Page::None, Action::None};
+  send_page_to_lcd(Context{Page::Main, Action::Controls});
+}
 
-    while(!back_.is_empty()) {
-      auto back = back_.pop();
-      if(back == forward_) {
-        send_page_to_lcd(forward_);
-        reset_forward();
-        return;
-      }
-    }
+void Pages::reset() {
+  back_.empty();
+}
 
-    Log::error() << F("Forward page not found") << forward_ << Log::endl();
-    reset_forward();
-    send_page_to_lcd(Page::Main);
+void Pages::save() {
+  settings.save();
+  if(current_page_ensure_no_move() && core.is_busy()) {
+    wait.wait();
+    background_task.set(Callback{&Pages::save_task});
   }
+  else
+    pages.show_forward_page();
+}
 
-  void save(SAVE_OPTIONS save, BACK_OPTIONS options) {
-    Log::verbose() << F("Pages::save") << static_cast<uint16_t>(save) << static_cast<uint16_t>(options) << Log::endl();
-    background_task.clear();
+void Pages::save_task() {
+  if(core.is_busy()) return;
+  background_task.clear();
+  status.reset();
+  pages.show_forward_page();
+}
 
-    if(test_one_bit(save, SAVE_OPTIONS::SETTINGS))  {
-      ExtUI::saveSettings();
-      if(test_one_bit(save, SAVE_OPTIONS::MESSAGE)) Status::set(GET_TEXT_F(MSG_SETTINGS_STORED), Status::STATUS_OPTIONS::RESET);
-    }
-    if(test_one_bit(options, BACK_OPTIONS::FINISH_MOVE) && Core::is_busy()) {
-      Wait::wait([]() -> CALLBACK_RESULT {
-        if (Core::is_busy()) return CALLBACK_RESULT::CONTINUE;
-        clear_temporaries(false);
-        Status::set_default();
-        show_forward_page();
-        return CALLBACK_RESULT::STOP;
-      });
-    }
-    else
-      show_forward_page();
+void Pages::back() {
+  if(current_page_ensure_no_move() && core.is_busy()) {
+    wait.wait();
+    background_task.set(Callback{&Pages::back_task});
   }
+  else
+    pages.show_back_page();
+}
 
-  void back(BACK_OPTIONS options) {
-    Log::verbose() << F("Pages::back") << static_cast<uint16_t>(options) << Log::endl();
-    Log::verbose() << F("back pages:") << back_ << Log::endl();
-    background_task.clear();
+void Pages::back_task() {
+  if(core.is_busy()) return;
+  background_task.clear();
+  status.reset();
+  pages.clear_temporaries();
+  pages.show_back_page();
+}
 
-    if(test_one_bit(options, BACK_OPTIONS::FINISH_MOVE) && Core::is_busy())
-      Wait::wait([] () -> CALLBACK_RESULT {
-        if(Core::is_busy()) return CALLBACK_RESULT::CONTINUE;
-        clear_temporaries(false);
-        Status::set_default();
-        show_back_page();
-        return CALLBACK_RESULT::STOP;
-      });
-    else
-      show_back_page();
+void Pages::clear_temporaries() {
+  auto current = get_current_context();
+  if(!is_temporary(current.page))
+    return;
+
+  Log::log() << F("Clear temporaries") << Log::endl();
+  while(is_temporary(current.page) && !back_.is_empty())
+    current = back_.pop();
+  send_page_to_lcd(current);
+}
+
+bool Pages::check_no_print(Page page) {
+  if(!test_one_bit(page, Page::EnterNoPrint) || !ExtUI::isPrinting())
+    return true;
+  wait.wait_back(F("This is not accessible when printing"));
+  return false;
+}
+
+void Pages::go_to_print() {
+  auto current = pages.get_current_context();
+  // If already on the print page, do nothing
+  if(current.page == Page::Print)
+    return;
+
+  // Otherwise, pop the back pages and send abort messages
+  while(!back_.is_empty() && current.page != Page::Print) {
+    core.process_action(current.action, KeyValue::Abort);
+    current = back_.pop();
   }
+  // Display print page
+  send_page_to_lcd(Context{Page::Print, Action::Print});
+}
 
-  void clear_temporaries(bool show) {
-    Log::verbose() << F("Pages::clear_temporaries") << show << Log::endl();
-
-    auto current = get_current_page();
-    if(!is_temporary(current)) return;
-    while(is_temporary(current) && !back_.is_empty()) current = back_.pop();
-    if(is_temporary(current)) current = Page::Main;
-
-    Log::verbose() << F("current page") << current << F("back pages:") << back_ << Log::endl();
-
-    if(show)
-      send_page_to_lcd(current);
-    else
-      current_ = current;
-  }
-
-  void back_all(BACK_ALL_OPTIONS options) {
-    Log::verbose() << F("Pages::back_all") << static_cast<uint16_t>(options) << Log::endl();
-    if(test_one_bit(options, BACK_ALL_OPTIONS::SEND_BACK))
-      while(!back_.is_empty()) {
-        Log::verbose() << F("  send back to page: ") << get_current_page() << Log::endl();
-        Core::process(get_current_page(), KEY_CODE_BACK, 0);
-      }
-    else
-      back_.empty();
-    if(test_one_bit(options, BACK_ALL_OPTIONS::SHOW_MAIN)) send_page_to_lcd(Page::Main);
-  }
-
-  void clear_current() {
-    Log::verbose() << F("Pages::clear_current") << Log::endl();
-    current_ = Page::None;
-  }
-
-  //! Retrieve the current page on the LCD screen
-  Page get_current_page() {
-    return current_;
-  }
-
-  inline namespace internals {
-
-    void reset_forward() {
-      forward_ = Page::None;
-    }
-
-    void send_page_to_lcd(Page page) {
-      Log::verbose() << F("Pages::send_page_to_lcd") << page << Log::endl();
-      WriteRegisterRequest{Register::PictureID}.write_page(page);
-      current_ = page;
-    }
-
-  }
 }

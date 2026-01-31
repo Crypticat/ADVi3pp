@@ -23,8 +23,6 @@
 /**
  * feature/pause.cpp - Pause feature support functions
  * This may be combined with related G-codes if features are consolidated.
- *
- * Note: Calls to ui.pause_show_message are passed to either ExtUI or MarlinUI.
  */
 
 #include "../inc/MarlinConfigPre.h"
@@ -62,8 +60,8 @@
 
 #if ENABLED(EXTENSIBLE_UI)
   #include "../lcd/extui/ui_api.h"
-#elif ENABLED(SOVOL_SV06_RTS)
-  #include "../lcd/sovol_rts/sovol_rts.h"
+#elif ENABLED(DWIN_LCD_PROUI)
+  #include "../lcd/e3v2/proui/dwin.h"
 #endif
 
 #include "../lcd/marlinui.h"
@@ -91,9 +89,7 @@ static xyze_pos_t resume_position;
   PauseMode pause_mode = PAUSE_MODE_PAUSE_PRINT;
 #endif
 
-#if ENABLED(CONFIGURE_FILAMENT_CHANGE)
-  fil_change_settings_t fc_settings[EXTRUDERS];
-#endif
+fil_change_settings_t fc_settings[EXTRUDERS];
 
 #if HAS_MEDIA
   #include "../sd/cardreader.h"
@@ -150,12 +146,7 @@ static bool ensure_safe_temperature(const bool wait=true, const PauseMode mode=P
       thermalManager.setTargetHotend(thermalManager.extrude_min_temp, active_extruder);
   #endif
 
-  ui.pause_show_message(PAUSE_MESSAGE_HEATING, mode);
-
-  #if ENABLED(SOVOL_SV06_RTS)
-    rts.gotoPage(ID_Cold_L, ID_Cold_D);
-    rts.updateTempE0();
-  #endif
+  ui.pause_show_message(PAUSE_MESSAGE_HEATING, mode); UNUSED(mode);
 
   if (wait) return thermalManager.wait_for_hotend(active_extruder);
 
@@ -208,7 +199,7 @@ bool load_filament(const_float_t slow_load_length/*=0*/, const_float_t fast_load
     first_impatient_beep(max_beep_count);
 
     KEEPALIVE_STATE(PAUSED_FOR_USER);
-    wait_for_user = WAIT_FOR_USER::WAIT;    // LCD click or M108 will clear this @advi3++
+    wait_for_user = true;    // LCD click or M108 will clear this
 
     TERN_(EXTENSIBLE_UI, ExtUI::onUserConfirmRequired(GET_TEXT_F(MSG_FILAMENTLOAD)));
 
@@ -217,16 +208,16 @@ bool load_filament(const_float_t slow_load_length/*=0*/, const_float_t fast_load
       hostui.prompt_do(PROMPT_USER_CONTINUE, F("Load Filament T"), tool, FPSTR(CONTINUE_STR));
     #endif
 
-    while (wait_for_user == WAIT_FOR_USER::WAIT) { // @advi3++
+    while (wait_for_user) {
       impatient_beep(max_beep_count);
-      #if ALL(HAS_FILAMENT_SENSOR, FILAMENT_CHANGE_RESUME_ON_INSERT)
+      #if ALL(FILAMENT_CHANGE_RESUME_ON_INSERT, FILAMENT_RUNOUT_SENSOR)
         #if MULTI_FILAMENT_SENSOR
-          #define _CASE_INSERTED(N) case N-1: if (!FILAMENT_IS_OUT(N)) wait_for_user = false; break;
+          #define _CASE_INSERTED(N) case N-1: if (READ(FIL_RUNOUT##N##_PIN) != FIL_RUNOUT##N##_STATE) wait_for_user = false; break;
           switch (active_extruder) {
             REPEAT_1(NUM_RUNOUT_SENSORS, _CASE_INSERTED)
           }
         #else
-          if (!FILAMENT_IS_OUT()) wait_for_user = false;
+          if (READ(FIL_RUNOUT_PIN) != FIL_RUNOUT_STATE) wait_for_user = false;
         #endif
       #endif
       idle_no_sleep();
@@ -242,8 +233,6 @@ bool load_filament(const_float_t slow_load_length/*=0*/, const_float_t fast_load
   #endif
 
   TERN_(BELTPRINTER, do_blocking_move_to_xy(0.00, 50.00));
-
-  TERN_(MPCTEMP, MPC::e_paused = true);
 
   // Slow Load filament
   if (slow_load_length) unscaled_e_move(slow_load_length, FILAMENT_CHANGE_SLOW_LOAD_FEEDRATE);
@@ -269,15 +258,14 @@ bool load_filament(const_float_t slow_load_length/*=0*/, const_float_t fast_load
   #if ENABLED(ADVANCED_PAUSE_CONTINUOUS_PURGE)
 
     KEEPALIVE_STATE(PAUSED_FOR_USER); // @advi3++
-    wait_for_user = WAIT_FOR_USER::WAIT; // A click or M108 breaks the purge_length loop @advi3++ move before displaying messages @advi3++
+    wait_for_user = true; // A click or M108 breaks the purge_length loop @advi3++ move before displaying messages
     if (show_lcd) ui.pause_show_message(PAUSE_MESSAGE_PURGE);
 
-    //TERN_(EXTENSIBLE_UI, ExtUI::onUserConfirmRequired(GET_TEXT_F(MSG_FILAMENT_CHANGE_PURGE))); // @advi3++
+    TERN_(EXTENSIBLE_UI, ExtUI::onUserConfirmRequired(GET_TEXT_F(MSG_FILAMENT_CHANGE_PURGE)));
     TERN_(HOST_PROMPT_SUPPORT, hostui.continue_prompt(GET_TEXT_F(MSG_FILAMENT_CHANGE_PURGE)));
-    // wait_for_user = true; // A click or M108 breaks the purge_length loop @advi3++
-    for (float purge_count = purge_length; purge_count > 0 && wait_for_user == WAIT_FOR_USER::WAIT; --purge_count) // @advi3++
+    for (float purge_count = purge_length; purge_count > 0 && wait_for_user; --purge_count)
       unscaled_e_move(1, ADVANCED_PAUSE_PURGE_FEEDRATE);
-    wait_for_user = WAIT_FOR_USER::CONTINUE; // @advi3++
+    wait_for_user = false;
 
   #else
 
@@ -285,11 +273,6 @@ bool load_filament(const_float_t slow_load_length/*=0*/, const_float_t fast_load
       if (purge_length > 0) {
         // "Wait for filament purge"
         if (show_lcd) ui.pause_show_message(PAUSE_MESSAGE_PURGE);
-
-        #if ENABLED(SOVOL_SV06_RTS)
-          rts.updateTempE0();
-          rts.gotoPage(ID_Purge_L, ID_Purge_D);
-        #endif
 
         // Extrude filament to get into hotend
         unscaled_e_move(purge_length, ADVANCED_PAUSE_PURGE_FEEDRATE);
@@ -301,26 +284,20 @@ bool load_filament(const_float_t slow_load_length/*=0*/, const_float_t fast_load
         if (show_lcd) {
           // Show "Purge More" / "Resume" menu and wait for reply
           KEEPALIVE_STATE(PAUSED_FOR_USER);
-          wait_for_user = WAIT_FOR_USER::CONTINUE; // @advi3++
-          #if ANY(HAS_MARLINUI_MENU, EXTENSIBLE_UI)
-            ui.pause_show_message(PAUSE_MESSAGE_OPTION); // MarlinUI and MKS UI also set PAUSE_RESPONSE_WAIT_FOR
+          wait_for_user = false;
+          #if ANY(HAS_MARLINUI_MENU, DWIN_LCD_PROUI)
+            ui.pause_show_message(PAUSE_MESSAGE_OPTION); // Also sets PAUSE_RESPONSE_WAIT_FOR
           #else
             pause_menu_response = PAUSE_RESPONSE_WAIT_FOR;
-            TERN_(SOVOL_SV06_RTS, rts.gotoPage(ID_PurgeMore_L, ID_PurgeMore_D));
           #endif
           while (pause_menu_response == PAUSE_RESPONSE_WAIT_FOR) idle_no_sleep();
         }
       #endif
 
-      if(pause_menu_response == PAUSE_RESPONSE_RESUME_ABORT) return false; // @advi3++
-
       // Keep looping if "Purge More" was selected
     } while (TERN0(M600_PURGE_MORE_RESUMABLE, pause_menu_response == PAUSE_RESPONSE_EXTRUDE_MORE));
 
   #endif
-
-  TERN_(MPCTEMP, MPC::e_paused = false);
-
   TERN_(HOST_PROMPT_SUPPORT, hostui.prompt_end());
 
   return true;
@@ -372,11 +349,6 @@ bool unload_filament(const_float_t unload_length, const bool show_lcd/*=false*/,
 
   if (show_lcd) ui.pause_show_message(PAUSE_MESSAGE_UNLOAD, mode);
 
-  #if ENABLED(SOVOL_SV06_RTS)
-    rts.updateTempE0();
-    rts.gotoPage(ID_Unload_L, ID_Unload_D);
-  #endif
-
   // Retract filament
   unscaled_e_move(-(FILAMENT_UNLOAD_PURGE_RETRACT) * mix_multiplier, (PAUSE_PARK_RETRACT_FEEDRATE) * mix_multiplier);
 
@@ -425,6 +397,8 @@ uint8_t did_pause_print = 0;
 bool pause_print(const_float_t retract, const xyz_pos_t &park_point, const bool show_lcd/*=false*/, const_float_t unload_length/*=0*/ DXC_ARGS) {
   DEBUG_SECTION(pp, "pause_print", true);
   DEBUG_ECHOLNPGM("... park.x:", park_point.x, " y:", park_point.y, " z:", park_point.z, " unloadlen:", unload_length, " showlcd:", show_lcd DXC_SAY);
+
+  UNUSED(show_lcd);
 
   if (did_pause_print) return false; // already paused
 
@@ -525,29 +499,24 @@ void show_continue_prompt(const bool is_reload) {
   DEBUG_ECHOLNPGM("... is_reload:", is_reload);
 
   ui.pause_show_message(is_reload ? PAUSE_MESSAGE_INSERT : PAUSE_MESSAGE_WAITING);
-  #if ENABLED(SOVOL_SV06_RTS)
-    rts.updateTempE0();
-    rts.gotoPage(ID_Insert_L, ID_Insert_D);
-    rts.sendData(Beep, SoundAddr);
-  #endif
   SERIAL_ECHO_START();
-  SERIAL_ECHO(is_reload ? F(_PMSG(STR_FILAMENT_CHANGE_INSERT) "\n") : F(_PMSG(STR_FILAMENT_CHANGE_WAIT) "\n"));
+  SERIAL_ECHOF(is_reload ? F(_PMSG(STR_FILAMENT_CHANGE_INSERT) "\n") : F(_PMSG(STR_FILAMENT_CHANGE_WAIT) "\n"));
 }
 
 void wait_for_confirmation(const bool is_reload/*=false*/, const int8_t max_beep_count/*=0*/ DXC_ARGS) {
   DEBUG_SECTION(wfc, "wait_for_confirmation", true);
   DEBUG_ECHOLNPGM("... is_reload:", is_reload, " maxbeep:", max_beep_count DXC_SAY);
 
-  //bool nozzle_timed_out = false; @advi3++
+  bool nozzle_timed_out = false;
 
   show_continue_prompt(is_reload);
 
   first_impatient_beep(max_beep_count);
 
   // Start the heater idle timers
-  //const millis_t nozzle_timeout = SEC_TO_MS(PAUSE_PARK_NOZZLE_TIMEOUT); // @advi3++
+  const millis_t nozzle_timeout = SEC_TO_MS(PAUSE_PARK_NOZZLE_TIMEOUT);
 
-  //HOTEND_LOOP() thermalManager.heater_idle[e].start(nozzle_timeout); // @advi3++
+  HOTEND_LOOP() thermalManager.heater_idle[e].start(nozzle_timeout);
 
   #if ENABLED(DUAL_X_CARRIAGE)
     const int8_t saved_ext        = active_extruder;
@@ -558,13 +527,12 @@ void wait_for_confirmation(const bool is_reload/*=false*/, const int8_t max_beep
   // Wait for filament insert by user and press button
   KEEPALIVE_STATE(PAUSED_FOR_USER);
   TERN_(HOST_PROMPT_SUPPORT, hostui.continue_prompt(GET_TEXT_F(MSG_NOZZLE_PARKED)));
-  // TERN_(EXTENSIBLE_UI, ExtUI::onUserConfirmRequired(GET_TEXT_F(MSG_NOZZLE_PARKED))); // @advi3++
-  ExtUI::onChangeFilamentConfirmRequired(); // @advi3++
-  wait_for_user = WAIT_FOR_USER::WAIT;    // LCD click or M108 will clear this @advi3++
-  while (wait_for_user == WAIT_FOR_USER::WAIT) { // @advi3++
+  //TERN_(EXTENSIBLE_UI, ExtUI::onUserConfirmRequired(GET_TEXT_F(MSG_NOZZLE_PARKED)));
+  ExtUI::onChangeFilamentConfirmRequired();
+  wait_for_user = true;    // LCD click or M108 will clear this
+  while (wait_for_user) {
     impatient_beep(max_beep_count);
 
-#if 0 // @advi3++
     // If the nozzle has timed out...
     if (!nozzle_timed_out)
       HOTEND_LOOP() nozzle_timed_out |= thermalManager.heater_idle[e].timed_out;
@@ -573,20 +541,11 @@ void wait_for_confirmation(const bool is_reload/*=false*/, const int8_t max_beep
     // re-heat the nozzle, re-show the continue prompt, restart idle timers, start over
     if (nozzle_timed_out) {
       ui.pause_show_message(PAUSE_MESSAGE_HEAT);
-      #if ENABLED(SOVOL_SV06_RTS)
-        rts.updateTempE0();
-        rts.gotoPage(ID_HeatNozzle_L, ID_HeatNozzle_D);
-      #endif
       SERIAL_ECHO_MSG(_PMSG(STR_FILAMENT_CHANGE_HEAT));
 
       TERN_(HOST_PROMPT_SUPPORT, hostui.prompt_do(PROMPT_USER_CONTINUE, GET_TEXT_F(MSG_HEATER_TIMEOUT), GET_TEXT_F(MSG_REHEAT)));
 
-      #if ENABLED(TOUCH_UI_FTDI_EVE)
-        ExtUI::onUserConfirmRequired(GET_TEXT_F(MSG_FTDI_HEATER_TIMEOUT));
-      #elif ENABLED(EXTENSIBLE_UI)
-        //ExtUI::onUserConfirmRequired(GET_TEXT_F(MSG_HEATER_TIMEOUT)); // @advi3++
-        LCD_MESSAGE(MSG_HEATER_TIMEOUT); // @advi3++
-      #endif
+      TERN_(EXTENSIBLE_UI, ExtUI::onUserConfirmRequired(GET_TEXT_F(MSG_HEATER_TIMEOUT)));
 
       TERN_(HAS_RESUME_CONTINUE, wait_for_user_response(0, true)); // Wait for LCD click or M108
 
@@ -615,12 +574,11 @@ void wait_for_confirmation(const bool is_reload/*=false*/, const int8_t max_beep
         LCD_MESSAGE(MSG_REHEATDONE);
       #endif
 
-      IF_DISABLED(PAUSE_REHEAT_FAST_RESUME, wait_for_user = WAIT_FOR_USER::WAIT); // @advi3++
+      IF_DISABLED(PAUSE_REHEAT_FAST_RESUME, wait_for_user = true);
 
       nozzle_timed_out = false;
       first_impatient_beep(max_beep_count);
     }
-#endif // @advi3++
     idle_no_sleep();
   }
   TERN_(DUAL_X_CARRIAGE, set_duplication_enabled(saved_ext_dup_mode, saved_ext));
@@ -646,27 +604,9 @@ void wait_for_confirmation(const bool is_reload/*=false*/, const int8_t max_beep
  * - Send host action for resume, if configured
  * - Resume the current SD print job, if any
  */
-void resume_print(
-  const_float_t   slow_load_length/*=0*/,
-  const_float_t   fast_load_length/*=0*/,
-  const_float_t   purge_length/*=ADVANCED_PAUSE_PURGE_LENGTH*/,
-  const int8_t    max_beep_count/*=0*/,
-  const celsius_t targetTemp/*=0*/,
-  const bool      show_lcd/*=true*/,
-  const bool      pause_for_user/*=false*/
-  DXC_ARGS
-) {
+void resume_print(const_float_t slow_load_length/*=0*/, const_float_t fast_load_length/*=0*/, const_float_t purge_length/*=ADVANCED_PAUSE_PURGE_LENGTH*/, const int8_t max_beep_count/*=0*/, const celsius_t targetTemp/*=0*/ DXC_ARGS) {
   DEBUG_SECTION(rp, "resume_print", true);
-  DEBUG_ECHOLNPGM(
-      "... slowlen:", slow_load_length
-    , " fastlen:", fast_load_length
-    , " purgelen:", purge_length
-    , " maxbeep:", max_beep_count
-    , " targetTemp:", targetTemp
-    , " show_lcd:", show_lcd
-    , " pause_for_user:", pause_for_user
-    DXC_SAY
-  );
+  DEBUG_ECHOLNPGM("... slowlen:", slow_load_length, " fastlen:", fast_load_length, " purgelen:", purge_length, " maxbeep:", max_beep_count, " targetTemp:", targetTemp DXC_SAY);
 
   /*
   SERIAL_ECHOLNPGM(
@@ -680,7 +620,7 @@ void resume_print(
   if (!did_pause_print) return;
 
   // Re-enable the heaters if they timed out
-  bool nozzle_timed_out = pause_for_user;
+  bool nozzle_timed_out = false;
   HOTEND_LOOP() {
     nozzle_timed_out |= thermalManager.heater_idle[e].timed_out;
     thermalManager.reset_hotend_idle_timer(e);
@@ -690,13 +630,7 @@ void resume_print(
     thermalManager.setTargetHotend(targetTemp, active_extruder);
 
   // Load the new filament
-  load_filament(slow_load_length, fast_load_length, purge_length, max_beep_count, show_lcd, nozzle_timed_out, PAUSE_MODE_SAME DXC_PASS);
-
-  // @advi3++ load_filament can abort the print
-  if(pause_menu_response == PAUSE_RESPONSE_RESUME_ABORT) {
-    ui.abort_print();
-    return;
-  }
+  load_filament(slow_load_length, fast_load_length, purge_length, max_beep_count, true, nozzle_timed_out, PAUSE_MODE_SAME DXC_PASS);
 
   if (targetTemp > 0) {
     thermalManager.setTargetHotend(targetTemp, active_extruder);
@@ -750,12 +684,6 @@ void resume_print(
   planner.set_e_position_mm((destination.e = current_position.e = resume_position.e));
 
   ui.pause_show_message(PAUSE_MESSAGE_STATUS);
-  #if ENABLED(SOVOL_SV06_RTS)
-    if (pause_flag)
-      rts.gotoPage(ID_PrintResume_L, ID_PrintResume_D);
-    else
-      rts.refreshTime();
-  #endif
 
   #ifdef ACTION_ON_RESUMED
     hostui.resumed();

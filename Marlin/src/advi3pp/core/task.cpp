@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,67 +17,56 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-#include "../../inc/MarlinConfig.h"
-#include "task.h"
 
+#include "../../inc/MarlinConfig.h"
+//#include <Arduino.h>
+#include "task.h"
+#include "logging.h"
 
 namespace ADVi3pp {
 
-  Task background_task{DEFAULT_TASK_DELAY}; // Primary task
-  Task status_task{DEFAULT_TASK_DELAY}; // To update status task
-  Task wait_task{DEFAULT_TASK_DELAY}; // For all wait screens
+Task::Task(const Callback& callback, unsigned int delay, Activation activation)
+: delay_{delay}, activation_{activation}, callback_{callback} {
+    set_next_execute_time();
+}
 
-  Elapse::Elapse(unsigned delay): delay_{delay} {
-    reset();
-  }
+//! Set the next task and its delay
+//! @param task     The next background task
+//! @param delay    Duration to be added to the current time to execute the background task
+//! @param activation The kind of activation for the task (one time, multiple times)
+void Task::set(const Callback& callback, unsigned int delay, Activation activation) {
+  delay_ = delay;
+  activation_ = activation;
+  callback_ = callback;
+  set_next_execute_time();
+}
 
-  bool Elapse::is_elapsed(bool force) {
-    if(!force && !ELAPSED(millis(), next_execute_time_)) return false;
-    reset();
-    return true;
-  }
+//! Reset the background task
+void Task::clear() {
+  callback_ = nullptr;
+}
 
-  bool Elapse::is_pending(bool force) {
-    if(!force && !PENDING(millis(), next_execute_time_)) return false;
-    reset();
-    return true;
-  }
+//! If there is an operating running, execute its next step
+bool Task::execute(bool force_execute) {
+  if(!callback_)
+    return false;
 
-  void Elapse::reset(unsigned delay) {
-    if(delay > 0) delay_ = delay;
-    next_execute_time_ = millis() + delay_;
-  }
+  if(!force_execute && !ELAPSED(millis(), next_execute_time_))
+    return false;
 
-  Task::Task(unsigned delay): elapse_{delay} {}
-
-  //! Set the next task and its delay
-  //! @param task     The next background task
-  void Task::set(CALLBACK_RESULT (*callback)(), unsigned delay) {
-    callback_ = callback;
-    elapse_.reset(delay);
-  }
-
-  void Task::rearm() {
-    elapse_.reset();
-  }
-
-  //! Reset the background task
-  void Task::clear() {
+  // Clear before calling to avoid reentrancy issues
+  Callback callback{callback_};
+  if(activation_ == Activation::ONE_TIME)
     callback_ = nullptr;
-  }
+  else
+    set_next_execute_time();
 
-  //! If there is an operating running, execute its next step
-  bool Task::execute(bool force_execute) {
-    if(!callback_) return false;
-    if(!elapse_.is_elapsed(force_execute)) return false;
+  callback();
+  return true;
+}
 
-    // Clear before calling to avoid reentrancy issues
-    auto copy{callback_};
-    clear();
-    if(copy() == CALLBACK_RESULT::CONTINUE) {
-      assert(!callback_);  // Be sure it has not been set in the meantime
-      callback_ = copy;
-    }
-    return true;
-  }
+void Task::set_next_execute_time() {
+  next_execute_time_ = millis() + delay_;
+}
+
 }

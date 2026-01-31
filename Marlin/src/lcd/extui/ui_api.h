@@ -46,10 +46,8 @@
 
 #include "../marlinui.h"
 #include "../../gcode/gcode.h"
-#include "../../module/temperature.h"
 
-#if ENABLED(ADVANCED_PAUSE_FEATURE)
-  #include "../../module/motion.h"
+#if M600_PURGE_MORE_RESUMABLE
   #include "../../feature/pause.h"
 #endif
 
@@ -59,42 +57,18 @@ namespace ExtUI {
   // in the EEPROM when the methods onStoreSettings and
   // onLoadSettings are called.
 
-  #ifndef EXTUI_EEPROM_DATA_SIZE
-    #define EXTUI_EEPROM_DATA_SIZE 48
-  #endif
-  static constexpr size_t eeprom_data_size = EXTUI_EEPROM_DATA_SIZE;
+  static constexpr size_t eeprom_data_size = 48;
 
   enum axis_t     : uint8_t { X, Y, Z, I, J, K, U, V, W, X2, Y2, Z2, Z3, Z4 };
   enum extruder_t : uint8_t { E0, E1, E2, E3, E4, E5, E6, E7 };
   enum heater_t   : uint8_t { H0, H1, H2, H3, H4, H5, BED, CHAMBER, COOLER };
   enum fan_t      : uint8_t { FAN0, FAN1, FAN2, FAN3, FAN4, FAN5, FAN6, FAN7 };
-  #if HAS_PID_HEATING
-    enum pidresult_t : uint8_t { PID_STARTED, PID_BED_STARTED, PID_CHAMBER_STARTED, PID_BAD_HEATER_ID, PID_TEMP_TOO_HIGH, PID_TUNING_TIMEOUT, PID_DONE };
-  #endif
-  #if ENABLED(MPC_AUTOTUNE)
-    enum mpcresult_t : uint8_t { MPC_STARTED, MPC_TEMP_ERROR, MPC_INTERRUPTED, MPC_DONE };
-  #endif
-  struct probe_limits_t { float xmin, ymin, xmax, ymax; };
+  enum result_t   : uint8_t { PID_STARTED, PID_BAD_EXTRUDER_NUM, PID_TEMP_TOO_HIGH, PID_TUNING_TIMEOUT, PID_DONE };
 
   constexpr uint8_t extruderCount = EXTRUDERS;
   constexpr uint8_t hotendCount   = HOTENDS;
   constexpr uint8_t fanCount      = FAN_COUNT;
   constexpr int     xTwistPoints  = XATC_MAX_POINTS; // @advi3++
-
-  inline const axis_t axis_to_axis_t(const AxisEnum a) {
-    switch (a) {
-      TERN_(HAS_X_AXIS, case X_AXIS:)
-      default: return X;
-      OPTCODE(HAS_Y_AXIS, case Y_AXIS: return Y)
-      OPTCODE(HAS_Z_AXIS, case Z_AXIS: return Z)
-      OPTCODE(HAS_I_AXIS, case I_AXIS: return I)
-      OPTCODE(HAS_J_AXIS, case J_AXIS: return J)
-      OPTCODE(HAS_K_AXIS, case K_AXIS: return K)
-      OPTCODE(HAS_U_AXIS, case U_AXIS: return U)
-      OPTCODE(HAS_V_AXIS, case V_AXIS: return V)
-      OPTCODE(HAS_W_AXIS, case W_AXIS: return W)
-    }
-  }
 
   #if HAS_MESH
     typedef float bed_mesh_t[GRID_MAX_POINTS_X][GRID_MAX_POINTS_Y];
@@ -102,7 +76,7 @@ namespace ExtUI {
 
   /**
    * The Extensible UI API is a utility class that can be used to implement:
-   * - An LCD view that responds to standard events, e.g., onMediaMounted(...)
+   * - An LCD view that responds to standard events, e.g., onMediaInserted(...)
    * - An LCD that polls firmware states and settings in a standard manner.
    *   (e.g., With tool indexes and extruder indexes).
    * - Standard hooks to send data to a serial-based controller.
@@ -174,15 +148,15 @@ namespace ExtUI {
   bool isHeaterIdle(const extruder_t);
   celsius_float_t getActualTemp_celsius(const heater_t);
   celsius_float_t getActualTemp_celsius(const extruder_t);
-  celsius_t getTargetTemp_celsius(const heater_t);
-  celsius_t getTargetTemp_celsius(const extruder_t);
-  celsius_t getDefaultTemp_celsius(const heater_t); // @advi3++
-  uint8_t getActualFan_percent(const fan_t);
-  uint8_t getTargetFan_percent(const fan_t);
+  celsius_float_t getTargetTemp_celsius(const heater_t);
+  celsius_float_t getTargetTemp_celsius(const extruder_t);
+  celsius_float_t getDefaultTemp_celsius(const heater_t); // @advi3++
+  celsius_float_t getDefaultTemp_celsius(const extruder_t); // @advi3++
+  float getActualFan_percent(const fan_t);
+  float getTargetFan_percent(const fan_t);
 
   // High level positions, by Axis ID, Extruder ID
   float getAxisPosition_mm(const axis_t);
-  void getRealtimeAxisPositions_mm(xyz_pos_t &xyz); // @advi3++
   float getAxisPosition_mm(const extruder_t);
   // Axis steps-per-mm, by Axis ID, Extruder ID
   float getAxisSteps_per_mm(const axis_t);
@@ -238,9 +212,7 @@ namespace ExtUI {
     void setLevelingActive(const bool);
     bool getLevelingIsValid();
     void onLevelingStart();
-    void onLevelingDone(bool success = true); // @advi3++
-    void onLevelingProgress(const int8_t index, const int8_t xpos, const int8_t ypos); // @advi3++
-    void cancelLeveling(); // @advi3++
+    void onLevelingDone();
     #if ENABLED(BLTOUCH)
     bool isLevelingHighSpeed(); // @advi3++
     void setLevelingHighSpeed(bool set = true); // @advi3++
@@ -252,15 +224,15 @@ namespace ExtUI {
     inline bool isLevelingTouchSw() { return false; } // @advi3++
     inline void setLevelingTouchSw(bool set) {} // @advi3++
     #endif
-    #if ENABLED(PREHEAT_BEFORE_LEVELING)
-      celsius_t getLevelingBedTemp();
-    #endif
     #if HAS_MESH
       // Mesh data, utilities, events
       bed_mesh_t& getMeshArray();
       float getMeshPoint(const xy_uint8_t &pos);
       void setMeshPoint(const xy_uint8_t &pos, const_float_t zval);
       void moveToMeshPoint(const xy_uint8_t &pos, const_float_t z);
+      void onLevelingDone(bool success); // @advi3++
+      void onLevelingProgress(const int8_t index, const int8_t xpos, const int8_t ypos); // @advi3++
+      void cancelLeveling(); // @advi3++
       void onMeshUpdate(const int8_t xpos, const int8_t ypos, const_float_t zval);
       inline void onMeshUpdate(const xy_int8_t &pos, const_float_t zval) { onMeshUpdate(pos.x, pos.y, zval); }
 
@@ -286,7 +258,7 @@ namespace ExtUI {
 
   // Provide a simulated click to MarlinUI
   inline void simulateUserClick() {
-    #if ANY(HAS_MARLINUI_MENU, EXTENSIBLE_UI)
+    #if ANY(HAS_MARLINUI_MENU, EXTENSIBLE_UI, DWIN_CREALITY_LCD_JYERSUI)
       ui.lcd_clicked = true;
     #endif
   }
@@ -305,7 +277,9 @@ namespace ExtUI {
 
   // Temperature Control
   void setTargetTemp_celsius(const_float_t, const heater_t, bool beep = false); // @advi3++
+  void setTargetTemp_celsius(const_float_t, const extruder_t, bool beep = false); // @advi3++
   void setDefaultTemp_celsius(const_float_t, const heater_t); // @advi3++
+  void setDefaultTemp_celsius(const_float_t, const extruder_t); // @advi3++
   void setTargetFan_percent(const_float_t, const fan_t);
   void coolDown();
 
@@ -315,10 +289,8 @@ namespace ExtUI {
   void setAxisPosition_mm(const_float_t, const extruder_t, const feedRate_t=0);
 
   // Planner Control
-  #if ENABLED(EDITABLE_STEPS_PER_UNIT)
-    void setAxisSteps_per_mm(const_float_t, const axis_t);
-    void setAxisSteps_per_mm(const_float_t, const extruder_t);
-  #endif
+  void setAxisSteps_per_mm(const_float_t, const axis_t);
+  void setAxisSteps_per_mm(const_float_t, const extruder_t);
   void setAxisMaxFeedrate_mm_s(const feedRate_t, const axis_t);
   void setAxisMaxFeedrate_mm_s(const feedRate_t, const extruder_t);
   void setAxisMaxAcceleration_mm_s2(const_float_t, const axis_t);
@@ -334,11 +306,12 @@ namespace ExtUI {
 
   // Waiting for User Interaction
   bool awaitingUserConfirm();
-  void setUserConfirmed(bool abort);
+  void setUserConfirmed();
 
-  #if ENABLED(ADVANCED_PAUSE_FEATURE)
+  #if M600_PURGE_MORE_RESUMABLE
     // "Purge More" has a control screen
     void setPauseMenuResponse(PauseMenuResponse);
+    extern PauseMessage pauseModeStatus;
     PauseMode getPauseMode();
   #endif
 
@@ -346,13 +319,6 @@ namespace ExtUI {
     // Linear Advance Control
     float getLinearAdvance_mm_mm_s(const extruder_t);
     void setLinearAdvance_mm_mm_s(const_float_t, const extruder_t);
-  #endif
-
-  #if HAS_SHAPING
-    float getShapingZeta(const axis_t);
-    void setShapingZeta(const float, const axis_t);
-    float getShapingFrequency(const axis_t);
-    void setShapingFrequency(const float, const axis_t);
   #endif
 
   // JD or Jerk Control
@@ -395,7 +361,6 @@ namespace ExtUI {
   #if HAS_BED_PROBE
     float getProbeOffset_mm(const axis_t);
     void setProbeOffset_mm(const_float_t, const axis_t);
-    probe_limits_t getBedProbeLimits();
   #endif
 
   // Backlash Control
@@ -438,26 +403,10 @@ namespace ExtUI {
     #endif
   #endif
 
-  // PSU Control @advi3++
-  #if ENABLED(PSU_CONTROL)
-    bool getPsuControlEnabled();
-    void setPsuControlEnabled(bool enable);
-    uint16_t getPsuControlTimeout();
-    void setPsuControlTimeout(uint16_t timeout);
-    celsius_t getPsuControlTemperature();
-    void setPsuControlTemperature(celsius_t temp);
-    bool getPsuControlInverted();
-    void setPsuControlInverted(bool inverted);
-  #endif
-
   // Power-Loss Recovery
   #if ENABLED(POWER_LOSS_RECOVERY)
     bool getPowerLossRecoveryEnabled();
     void setPowerLossRecoveryEnabled(const bool);
-    bool getPowerLossRecoveryInverted(); // @advi3++
-    void setPowerLossRecoveryInverted(bool inverted); // @advi3++
-    uint16_t getPowerLossRecoveryPurge(); // @advi3++
-    void setPowerLossRecoveryPurge(uint16_t length); // @advi3++
   #endif
 
   // Hotend PID
@@ -520,12 +469,12 @@ namespace ExtUI {
    */
   void mountMedia(); // @advi3++
   void releaseMedia(); // @advi3++
-  bool isMediaMounted();
+  bool isMediaInserted();
+  bool isMediaMounted(); // @advi3++
   bool isPrintingFromMediaPaused();
   bool isPrintingFromMedia();
   bool isPrinting();
   bool isPrintingPaused();
-  bool isOngoingPrintJob();
 
   void printFile(const char *filename);
   void stopPrint();
@@ -555,56 +504,27 @@ namespace ExtUI {
    */
   void onStartup();
   void onIdle();
-
-  void onMediaMounted();
+  void onMediaInserted();
   void onMediaError();
   void onMediaRemoved();
   void onMediaOpenError(const char* filename); // @advi3++
-
-  void onHeatingError(const heater_id_t header_id);
-  void onMinTempError(const heater_id_t header_id);
-  void onMaxTempError(const heater_id_t header_id);
-
   void onPlayTone(const uint16_t frequency, const uint16_t duration=0);
-
-  void onPrinterKilled(FSTR_P const error, FSTR_P const component);
-  void onSurviveInKilled();
-
+  void onPrinterKilled(float temp, FSTR_P const error, FSTR_P const component); // @advi3++
   void onPrintTimerStarted();
   void onPrintTimerPaused();
   void onPrintTimerStopped();
   void onPrintDone();
-
   void onFilamentRunout(const extruder_t extruder);
-
   void onUserConfirmRequired(const char * const msg);
   void onUserConfirmRequired(FSTR_P const fstr);
   void onChangeFilamentConfirmRequired(); // @advi3++
-
-  // For fancy LCDs include an icon ID, message, and translated button title
-  void onUserConfirmRequired(const int icon, const char * const cstr, FSTR_P const fBtn);
-  void onUserConfirmRequired(const int icon, FSTR_P const fstr, FSTR_P const fBtn);
-
-  #if ENABLED(ADVANCED_PAUSE_FEATURE)
-    // Standard stdOnPauseMode sets pauseModeStatus and calls onUserConfirmRequired
-    extern PauseMessage pauseModeStatus;
-    void stdOnPauseMode(const PauseMessage message, const PauseMode mode=PAUSE_MODE_SAME, const uint8_t extruder=active_extruder);
-    void onPauseMode(const PauseMessage message, const PauseMode mode=PAUSE_MODE_SAME, const uint8_t extruder=active_extruder);
-  #endif
-
-  void onStatusChanged_P(PGM_P const msg, bool persist);  // @advi3++
-  inline void onStatusChanged(FSTR_P const fstr, bool persist) { onStatusChanged_P(FTOP(fstr), persist); } // @advi3++
-  void onStatusChanged(const char * const msg, bool persist); // @advi3++
+  void onStatusChanged(const char * const msg);
+  void onStatusChanged(FSTR_P const fstr);
   void onShowStatus(); // @advi3++
-
   void onHomingStart();
   void onHomingDone();
-
   void onSteppersDisabled();
   void onSteppersEnabled();
-  void onAxisDisabled(const axis_t axis);
-  void onAxisEnabled(const axis_t axis);
-
   void onFactoryReset();
   void onStoreSettings(char *);
   void onLoadSettings(const char *);
@@ -618,8 +538,13 @@ namespace ExtUI {
     void saveSettings();
     void loadSettings();
     void resetSettings();
+    using eeprom_write = bool (*)(int &pos, const uint8_t* value, uint16_t size, uint16_t* crc);
+    using eeprom_read  = bool (*)(int &pos, uint8_t* value, uint16_t size, uint16_t* crc, const bool force);
+    void onStoreSettingsEx(eeprom_write write, int& eeprom_index, uint16_t& working_crc);
+    bool onLoadSettingsEx(eeprom_read read, int& eeprom_index, uint16_t& working_crc, bool validating);
+    uint16_t getSizeofSettings();
   #endif
-  
+
   // @advi3++
   #if ENABLED(SKEW_CORRECTION)
     #if ENABLED(SKEW_CORRECTION_FOR_Z)
@@ -628,37 +553,16 @@ namespace ExtUI {
         void setSkewFactors(float xy);
     #endif
   #endif
-  
-  #if ENABLED(PREVENT_COLD_EXTRUSION)
-    void onSetMinExtrusionTemp(const celsius_t t);
-  #endif
+
   #if ENABLED(POWER_LOSS_RECOVERY)
     void onSetPowerLoss(const bool onoff);
     void onPowerLoss();
     void onPowerLossResume();
   #endif
-  #if ENABLED(PSU_CONTROL) // @advi3++
-    void onPowerOff();
-  #endif
   #if HAS_PID_HEATING
-    void onPIDTuningProgress(int cycleIndex, int nbCycles); // @advi3++
-    void onPIDTuningReportTemp(int heater); // @advi3++
-    void onPIDTuning(const pidresult_t rst); // @advi3++
-    void onStartM303(const int count, const heater_id_t hid, const celsius_t temp);
-  #endif
-  #if ENABLED(MPC_AUTOTUNE)
-    void onMPCTuning(const mpcresult_t rst);
-  #endif
-  #if ENABLED(PLATFORM_M997_SUPPORT)
-    void onFirmwareFlash();
-  #endif
-  
-  // @advi3++
-  #if HAS_ZV_SHAPING
-    void setShapingDampingRatio(const AxisEnum axis, const_float_t zeta);
-    float getShapingDampingRatio(const AxisEnum axis);
-    void setShapingFrequency(const AxisEnum axis, const_float_t freq);
-    float getShapingFrequency(const AxisEnum axis);
+    void onPidTuningProgress(int cycleIndex, int nbCycles); // @advi3++
+    void onPidTuningReportTemp(int heater); // @advi3++
+    void onPidTuning(const result_t rst);
   #endif
 
   // @advi3++

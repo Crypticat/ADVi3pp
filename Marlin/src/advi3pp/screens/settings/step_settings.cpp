@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,57 +19,47 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-#include "../../../lcd/extui/ui_api.h"
 #include "step_settings.h"
 #include "../../core/dgus.h"
 
-namespace ADVi3pp::StepSettings {
+namespace ADVi3pp {
 
-  inline namespace internals {
-    constexpr unsigned SCALE = 10;
+StepSettings steps_settings;
 
-    void show_command();
-    void save_command();
+static const unsigned SCALE = 10;
+
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool StepSettings::on_enter() {
+  WriteRamRequest{Variable::Value0}.write_words(
+    ExtUI::getAxisSteps_per_mm(ExtUI::X) * SCALE,
+    ExtUI::getAxisSteps_per_mm(ExtUI::Y) * SCALE,
+    ExtUI::getAxisSteps_per_mm(ExtUI::Z) * SCALE,
+    ExtUI::getAxisSteps_per_mm(ExtUI::E0) * SCALE
+  );
+  return true;
+}
+
+//! Save the Steps settings
+void StepSettings::on_save_command() {
+  ReadRam response{Variable::Value0};
+  if(!response.send_receive(4)) {
+    Log::error() << F("Receiving Frame (Steps Settings)") << Log::endl();
+    return;
   }
 
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: show_command(); break;
-      case KEY_CODE_BACK: Pages::back(Pages::BACK_OPTIONS::NONE); break;
-      case KEY_CODE_SAVE: save_command(); break;
-      default: return false;
-    }
-    return true;
-  }
+  uint16_t x = response.read_word();
+  uint16_t y = response.read_word();
+  uint16_t z = response.read_word();
+  uint16_t e = response.read_word();
 
-  inline namespace internals {
+  ExtUI::setAxisSteps_per_mm(static_cast<float>(x) / SCALE, ExtUI::X);
+  ExtUI::setAxisSteps_per_mm(static_cast<float>(y) / SCALE, ExtUI::Y);
+  ExtUI::setAxisSteps_per_mm(static_cast<float>(z) / SCALE, ExtUI::Z);
+  ExtUI::setAxisSteps_per_mm(static_cast<float>(e) / SCALE, ExtUI::E0);
 
-    void show_command() {
-      WriteRamRequest{Variable::Value0}.write_words(
-          ExtUI::getAxisSteps_per_mm(ExtUI::X) * SCALE,
-          ExtUI::getAxisSteps_per_mm(ExtUI::Y) * SCALE,
-          ExtUI::getAxisSteps_per_mm(ExtUI::Z) * SCALE,
-          ExtUI::getAxisSteps_per_mm(ExtUI::E0) * SCALE
-      );
-      Pages::show(Page::StepsSettings);
-    }
+  Parent::on_save_command();
+}
 
-    //! Save the Steps settings
-    void save_command() {
-      ReadRam response{Variable::Value0};
-      if(!response.send_receive(4)) return;
-      auto x = response.read_uint() * 1.;
-      auto y = response.read_uint() * 1.;
-      auto z = response.read_uint() * 1.;
-      auto e = response.read_uint() * 1.;
 
-      ExtUI::setAxisSteps_per_mm(x / SCALE, ExtUI::X);
-      ExtUI::setAxisSteps_per_mm(y / SCALE, ExtUI::Y);
-      ExtUI::setAxisSteps_per_mm(z / SCALE, ExtUI::Z);
-      ExtUI::setAxisSteps_per_mm(e / SCALE, ExtUI::E0);
-
-      Pages::save(Pages::SAVE_OPTIONS::SETTINGS | Pages::SAVE_OPTIONS::MESSAGE, Pages::BACK_OPTIONS::NONE);
-    }
-
-  }
 }

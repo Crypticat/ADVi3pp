@@ -21,83 +21,77 @@
 
 #pragma once
 
-#include "ADVstd.h"
-
 namespace adv {
 
-  inline uint16_t word_from_bytes(uint8_t high, uint8_t low) {
-      return static_cast<uint16_t>(high) << 8 | low;
-  }
+inline uint16_t word_from_bytes(uint8_t high, uint8_t low)
+{
+    return static_cast<uint16_t>(high) << 8 | low;
+}
 
-  inline uint16_t low_word(uint32_t dword) {
-    return static_cast<uint16_t>(dword & 0x0000FFFF);
-  }
+template<typename T>
+T endian_swap(T)
+{
+    static_assert(assert_false<T>::value, "Not implemented for this type");
+}
 
-  inline uint16_t high_word(uint32_t dword) {
-    return static_cast<uint16_t>(dword >> 16);
-  }
+template<>
+inline uint16_t endian_swap<uint16_t>(uint16_t value)
+{
+    return ((value & 0xFF00) >> 8) | ((value & 0x00FF) << 8);
+}
 
-  inline uint32_t dword_from_words(uint16_t high, uint16_t low) {
-    return static_cast<uint32_t>(high) << 16 | low;
-  }
+template<>
+inline int16_t endian_swap<int16_t>(int16_t value)
+{
+    return ((value & 0xFF00) >> 8) | ((value & 0x00FF) << 8);
+}
 
-  template<typename T>
-  T endian_swap(T) {
-      static_assert(assert_false<T>::value, "Not implemented for this type");
-  }
+template<>
+inline uint32_t endian_swap(uint32_t value)
+{
+    return
+      ((value & 0x000000FF) << 24) |
+      ((value & 0x0000FF00) <<  8) |
+      ((value & 0x00FF0000) >>  8) |
+      ((value & 0xFF000000) >> 24);
+}
 
-  template<>
-  inline uint16_t endian_swap<uint16_t>(uint16_t value) {
-      return ((value & 0xFF00) >> 8) | ((value & 0x00FF) << 8);
-  }
+template<>
+inline int32_t endian_swap(int32_t value)
+{
+    return
+      ((value & 0x000000FF) << 24) |
+      ((value & 0x0000FF00) <<  8) |
+      ((value & 0x00FF0000) >>  8) |
+      ((value & 0xFF000000) >> 24);
+}
 
-  template<>
-  inline int16_t endian_swap<int16_t>(int16_t value) {
-      return static_cast<int16_t>((static_cast<uint16_t>(value) & 0xFF00) >> 8) | ((value & 0x00FF) << 8);
-  }
+template<>
+inline uint64_t endian_swap(uint64_t value)
+{
+    return
+      ((value & 0x00000000000000FF) << 56) |
+      ((value & 0x000000000000FF00) << 40) |
+      ((value & 0x0000000000FF0000) << 24) |
+      ((value & 0x00000000FF000000) <<  8) |
+      ((value & 0x000000FF00000000) >>  8) |
+      ((value & 0x0000FF0000000000) >> 24) |
+      ((value & 0x00FF000000000000) >> 40) |
+      ((value & 0xFF00000000000000) >> 56);
+}
 
-  template<>
-  inline uint32_t endian_swap(uint32_t value) {
-      return
-        ((value & 0x000000FF) << 24) |
-        ((value & 0x0000FF00) <<  8) |
-        ((value & 0x00FF0000) >>  8) |
-        ((value & 0xFF000000) >> 24);
-  }
-
-  template<>
-  inline int32_t endian_swap(int32_t value) {
-      return
-        ((value & 0x000000FF) << 24) |
-        ((value & 0x0000FF00) <<  8) |
-        ((value & 0x00FF0000) >>  8) |
-        ((value & 0xFF000000) >> 24);
-  }
-
-  template<>
-  inline uint64_t endian_swap(uint64_t value) {
-      return
-        ((value & 0x00000000000000FF) << 56) |
-        ((value & 0x000000000000FF00) << 40) |
-        ((value & 0x0000000000FF0000) << 24) |
-        ((value & 0x00000000FF000000) <<  8) |
-        ((value & 0x000000FF00000000) >>  8) |
-        ((value & 0x0000FF0000000000) >> 24) |
-        ((value & 0x00FF000000000000) >> 40) |
-        ((value & 0xFF00000000000000) >> 56);
-  }
-
-  template<>
-  inline int64_t endian_swap(int64_t value) {
-      return
-        ((value & 0x00000000000000FF) << 56) |
-        ((value & 0x000000000000FF00) << 40) |
-        ((value & 0x0000000000FF0000) << 24) |
-        ((value & 0x00000000FF000000) <<  8) |
-        ((value & 0x000000FF00000000) >>  8) |
-        ((value & 0x0000FF0000000000) >> 24) |
-        ((value & 0x00FF000000000000) >> 40) |
-        ((value & 0xFF00000000000000) >> 56);
-  }
+template<>
+inline int64_t endian_swap(int64_t value)
+{
+    return
+      ((value & 0x00000000000000FF) << 56) |
+      ((value & 0x000000000000FF00) << 40) |
+      ((value & 0x0000000000FF0000) << 24) |
+      ((value & 0x00000000FF000000) <<  8) |
+      ((value & 0x000000FF00000000) >>  8) |
+      ((value & 0x0000FF0000000000) >> 24) |
+      ((value & 0x00FF000000000000) >> 40) |
+      ((value & 0xFF00000000000000) >> 56);
+}
 
 }

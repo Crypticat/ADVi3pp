@@ -1,30 +1,5 @@
 # ADVi3++ Changelog
 
-## 6.0.0 - (2025-06-19)
-
-* GCode M1300: ADVi3++ Pages management
-* GCode M1301: ADVi3++ Default Hotend temperature
-* GCode M1302: ADVi3++ Default Bed temperature
-* **#354** - [More precise values for hotend and bed temperatures](https://github.com/andrivet/ADVi3pp/issues/354)
-* **#353** - [Display X, Y and Z coordinates in real-time](https://github.com/andrivet/ADVi3pp/issues/353)
-* **#352** - [Support of Bigtreetech Relay 1.2 to add power loss and power control features to all printers](https://github.com/andrivet/ADVi3pp/issues/352)
-* **#350** - [Widget LED element marked as exportable](https://github.com/andrivet/ADVi3pp/issues/350)
-* **#349** - [Element width rendering in Sketch app](https://github.com/andrivet/ADVi3pp/issues/349)
-* **#348** - [Fix preheat presets fan speeds](https://github.com/andrivet/ADVi3pp/issues/348)
-* **#346** - [In the Move panel, the E- button does not work](https://github.com/andrivet/ADVi3pp/issues/346)
-* **#345** - [Be able to cycle back and forth between the first and last setup screens on the temperature presets](https://github.com/andrivet/ADVi3pp/issues/345)
-* **#340** - [With some LCD panels, the text does not appear correctly](https://github.com/andrivet/ADVi3pp/issues/340)
-* **#339** - [Be able to set the bed temperature in the leveling screens](https://github.com/andrivet/ADVi3pp/issues/339)
-* **#336** - [Add support for M593 - Input Shaping](https://github.com/andrivet/ADVi3pp/issues/336)
-* **#316** - [Do not cooldown immediately when Unloading filament](https://github.com/andrivet/ADVi3pp/issues/316)
-* **#222** - [Support for M80/M81 for Balco 3D Printer](https://github.com/andrivet/ADVi3pp/issues/222)
-* **#205** - [Support of Mark II Power Loss](https://github.com/andrivet/ADVi3pp/issues/205)
-* **#59** - [Manual Mesh Bed Leveling](https://github.com/andrivet/ADVi3pp/issues/59)
-
-### Removed
-
-* Multiple PIDs
-
 ## 5.8.0 (2024-03-17)
 
 * **#344** - [Leveling state is not restored after homing](https://github.com/andrivet/ADVi3pp/issues/344)

@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,135 +19,126 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-#include "../../../lcd/extui/ui_api.h"
-#include "../../lib/ADVstd/endian.h"
-#include "../../core/dgus.h"
-#include "../../core/core.h"
 #include "pid_settings.h"
+#include "../../core/dgus.h"
+#include "../../core/pid.h"
+#include "../tuning/pid_tuning.h"
 
-namespace ADVi3pp::PidSettings {
+namespace ADVi3pp {
 
-  inline namespace internals {
-    constexpr uint16_t KEY_CODE_BED = 1;
-    constexpr uint16_t KEY_CODE_EXTRUDER = 2;
-    constexpr uint16_t KEY_CODE_PLUS_Kp = 3;
-    constexpr uint16_t KEY_CODE_MINUS_Kp = 4;
-    constexpr uint16_t KEY_CODE_PLUS_Ki = 5;
-    constexpr uint16_t KEY_CODE_MINUS_Ki = 6;
-    constexpr uint16_t KEY_CODE_PLUS_Kd = 7;
-    constexpr uint16_t KEY_CODE_MINUS_Kd = 8;
-    constexpr Variable VAR_Kp = Variable::Value0;
-    constexpr Variable VAR_Ki = Variable::Value2;
-    constexpr Variable VAR_Kd = Variable::Value4;
-    constexpr Variable VAR_HEATER = Variable::Value6;
+PidSettings pid_settings;
 
-    void show_command(bool bed);
-    void back_command();
-    void save_command();
-    void heater_command(bool bed);
-    void k_command(int increment, Variable var);
 
-    void to_lcd(bool bed);
-    void from_lcd();
-  }
-
-  bool handle_command(uint16_t key_code, uint16_t arg) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: show_command(arg); break;
-      case KEY_CODE_BACK: back_command(); break;
-      case KEY_CODE_SAVE: save_command(); break;
-      case KEY_CODE_EXTRUDER: heater_command(false); break;
-      case KEY_CODE_BED: heater_command(true); break;
-      case KEY_CODE_PLUS_Kp: k_command(+1, VAR_Kp); break;
-      case KEY_CODE_PLUS_Ki: k_command(+1, VAR_Ki); break;
-      case KEY_CODE_PLUS_Kd: k_command(+1, VAR_Kd); break;
-      case KEY_CODE_MINUS_Kp: k_command(-1, VAR_Kp); break;
-      case KEY_CODE_MINUS_Ki: k_command(-1, VAR_Ki); break;
-      case KEY_CODE_MINUS_Kd: k_command(-1, VAR_Kd); break;
-      default: return false;
-    }
+//! Handle PID Settings command
+//! @param key_value    The sub-action to handle
+//! @return             True if the action was handled
+bool PidSettings::on_dispatch(KeyValue key_value) {
+  if(Parent::on_dispatch(key_value))
     return true;
+
+  switch(key_value) {
+    case KeyValue::PidSettingsHotend:   hotend_command(); break;
+    case KeyValue::PidSettingsBed:      bed_command(); break;
+    case KeyValue::PidSettingPrevious:  previous_command(); break;
+    case KeyValue::PidSettingNext:      next_command(); break;
+    default:                            return false;
   }
 
-  inline namespace internals {
+  return true;
+}
 
-    void show_command(bool bed) {
-      if(!Core::check_not_busy()) return;
-      to_lcd(bed);
-      Pages::show(Page::PidSettings);
-    }
+//! Handle the select Hotend PID command
+void PidSettings::hotend_command() {
+  from_lcd();
+  kind_ = TemperatureKind::Hotend;
+  to_lcd();
+}
 
-    void back_command() {
-      ExtUI::loadSettings(); // To restore previous PID
-      Pages::back(Pages::BACK_OPTIONS::NONE);
-    }
+//! Handle the select Bed PID command
+void PidSettings::bed_command() {
+  from_lcd();
+  kind_ = TemperatureKind::Bed;
+  to_lcd();
+}
 
-    //! Save the PID settings
-    void save_command() {
-      from_lcd();
-      Pages::save(Pages::SAVE_OPTIONS::SETTINGS | Pages::SAVE_OPTIONS::MESSAGE, Pages::BACK_OPTIONS::NONE);
-    }
+//! Handle the show previous PID values command
+void PidSettings::previous_command() {
+  if(index_ <= 0)
+    return;
+  from_lcd();
+  index_ -= 1;
+  to_lcd();
+}
 
-    void heater_command(bool bed) {
-      from_lcd();
-      to_lcd(bed);
-    }
+//! Handle the show next PID values command
+void PidSettings::next_command() {
+  if(index_ >= Pid::NB_PIDs - 1)
+    return;
+  from_lcd();
+  index_ += 1;
+  to_lcd();
+}
 
-    void k_command(int increment, Variable var) {
-      ReadRam response{var};
-      if(!response.send_receive(2)) return;
-      auto high = response.read_uint();
-      auto low = response.read_uint();
-      auto value = adv::dword_from_words(high, low) + increment;
-      WriteRamRequest{var}.write_words(adv::high_word(value), adv::low_word(value));
-    }
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool PidSettings::on_enter() {
+  to_lcd();
+  return true;
+}
 
-    //! Send the current data to the LCD panel.
-    void to_lcd(bool bed) {
-      const auto &pid = bed ? thermalManager.temp_bed.pid : thermalManager.temp_hotend[0].pid;
-      auto p = static_cast<uint32_t>(pid.p() * 100);
-      auto i = static_cast<uint32_t>(pid.i() * 100);
-      auto d = static_cast<uint32_t>(pid.d() * 100);
-      WriteRamRequest{VAR_Kp}.write_words(
-          adv::high_word(p),
-          adv::low_word(p),
-          adv::high_word(i),
-          adv::low_word(i),
-          adv::high_word(d),
-          adv::low_word(d),
-          bed
-      );
-    }
+//! Save the PID settings
+void PidSettings::on_save_command() {
+  from_lcd();
+  assert(kind_ <= TemperatureKind::Hotend);
+  pid.set_marlin_pid(kind_, index_);
+  Parent::on_save_command();
+}
 
-    //! Save the settings from the LCD Panel.
-    void from_lcd() {
-      ReadRam response{VAR_Kp};
-      if(!response.send_receive(7)) return;
+//! Execute the Back command
+void PidSettings::on_back_command() {
+  settings.restore();
+  Parent::on_back_command();
+}
 
-      auto p_high = response.read_uint();
-      auto p_low = response.read_uint();
-      auto i_high = response.read_uint();
-      auto i_low = response.read_uint();
-      auto d_high = response.read_uint();
-      auto d_low = response.read_uint();
-      auto bed = response.read_bool();
 
-      auto p = static_cast<float>(adv::dword_from_words(p_high, p_low)) / 100.f;
-      auto i = static_cast<float>(adv::dword_from_words(i_high, i_low)) / 100.f;
-      auto d = static_cast<float>(adv::dword_from_words(d_high, d_low)) / 100.f;
+//! Send the current data to the LCD panel.
+void PidSettings::to_lcd() const {
+  const PidValue& value = pid.get_pid(kind_, index_);
+  WriteRamRequest{Variable::Value0}.write_words(
+    kind_ == TemperatureKind::Hotend ? 0u : 1u,
+    value.temperature_,
+    value.Kp_ * 100,
+    value.Ki_ * 100,
+    value.Kd_ * 100
+  );
 
-      if(bed) {
-        thermalManager.temp_bed.pid.set_Kp(p);
-        thermalManager.temp_bed.pid.set_Ki(i);
-        thermalManager.temp_bed.pid.set_Kd(d);
-      }
-      else {
-        SET_HOTEND_PID(Kp, 0, p);
-        SET_HOTEND_PID(Ki, 0, i);
-        SET_HOTEND_PID(Kd, 0, d);
-        thermalManager.updatePID();
-      }
-    }
+  ADVString<8> indexes;
+  indexes << index_ + 1 << F(" / ") << Pid::NB_PIDs;
+  WriteRamRequest{Variable::ShortText0}.write_text(indexes);
+}
 
-  }
+//! Save the settings from the LCD Panel.
+void PidSettings::from_lcd() {
+  ReadRam response{Variable::Value0};
+  if(!response.send_receive(5))
+    return;
+
+  uint16_t kind = response.read_word();
+  uint16_t temperature = response.read_word();
+  uint16_t p = response.read_word();
+  uint16_t i = response.read_word();
+  uint16_t d = response.read_word();
+
+  kind_ = kind ? TemperatureKind::Bed : TemperatureKind::Hotend;
+  PidValue& value = pid.get_pid(kind_, index_);
+
+  value.Kp_ = static_cast<float>(p) / 100;
+  value.Ki_ = static_cast<float>(i) / 100;
+  value.Kd_ = static_cast<float>(d) / 100;
+  value.temperature_ = temperature;
+
+  pid.set_marlin_pid(kind_, index_);
+}
+
+
 }

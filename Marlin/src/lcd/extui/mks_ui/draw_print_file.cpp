@@ -168,7 +168,7 @@ static void event_handler(lv_obj_t *obj, lv_event_t event) {
     }
     else {
       lv_clear_print_file();
-      TERN(HAS_MULTI_VOLUME, lv_draw_media_select(), lv_draw_ready_print());
+      TERN(MULTI_VOLUME, lv_draw_media_select(), lv_draw_ready_print());
     }
   }
   else {
@@ -474,7 +474,7 @@ void cutFileName(char *path, int len, int bytePerLine, char *outStr) {
         wcscpy(outStr, beginIndex);
     #else
       if ((int)strlen(beginIndex) > len)
-        strlcpy(outStr, beginIndex, len + 1);
+        strncpy(outStr, beginIndex, len);
       else
         strcpy(outStr, beginIndex);
     #endif
@@ -485,7 +485,7 @@ void cutFileName(char *path, int len, int bytePerLine, char *outStr) {
         wcsncpy(outStr, (const WCHAR *)beginIndex, len - 3);
         wcscat(outStr, (const WCHAR *)gFileTail);
       #else
-        strlcpy(outStr, beginIndex, len - 3);
+        strncpy(outStr, beginIndex, len - 4);
         strcat_P(outStr, PSTR("~.g"));
       #endif
     }
@@ -495,7 +495,7 @@ void cutFileName(char *path, int len, int bytePerLine, char *outStr) {
         wcsncpy(outStr, (const WCHAR *)beginIndex, strsize);
         wcscat(outStr, (const WCHAR *)&gFileTail[3]);
       #else
-        strlcpy(outStr, beginIndex, strsize + 1);
+        strncpy(outStr, beginIndex, strsize);
         strcat_P(outStr, PSTR("g"));
       #endif
     }

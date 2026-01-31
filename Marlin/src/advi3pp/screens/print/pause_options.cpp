@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,59 +18,44 @@
  *
  */
 
-#include "../../../lcd/extui/ui_api.h"
-#include "../../core/status.h"
-#include "../common/wait.h"
+#include "../../../inc/MarlinConfig.h"
 #include "pause_options.h"
+#include "../../core/wait.h"
 
-namespace ADVi3pp::PauseOptions {
+namespace ADVi3pp {
 
-  inline namespace internals {
-    constexpr uint16_t KEY_CODE_EXTRUDE = 1;
-    constexpr uint16_t KEY_CODE_RESUME = 2;
-    constexpr uint16_t KEY_CODE_STOP = 3;
+PauseOptions pause_options;
 
-    void show_command();
-    void extrude_command();
-    void resume_command();
-    void stop_command();
-  }
-
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: show_command(); break;
-      case KEY_CODE_EXTRUDE: extrude_command(); break;
-      case KEY_CODE_RESUME: resume_command(); break;
-      case KEY_CODE_STOP: stop_command(); break;
-      default: return false;
-    }
+//! Handle Preheat actions.
+//! @param key_value    Sub-action to handle
+//! @return             True if the action was handled
+bool PauseOptions::on_dispatch(KeyValue key_value) {
+  if(Parent::on_dispatch(key_value))
     return true;
+
+  switch(key_value) {
+    case KeyValue::Extrude:     extrude_command(); break;
+    case KeyValue::Resume:      resume_command(); break;
+    default:                    return false;
   }
 
-  inline namespace internals {
+  return true;
+}
 
-    void show_command() {
-      ExtUI::setPauseMenuResponse(PAUSE_RESPONSE_WAIT_FOR);
-      Pages::clear_temporaries(false);
-      Pages::show(Page::PauseOptions);
-    }
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool PauseOptions::on_enter() {
+  pause_menu_response = PAUSE_RESPONSE_WAIT_FOR;
+  return true;
+}
 
-    void extrude_command() {
-      Pages::clear_current();
-      ExtUI::setPauseMenuResponse(PAUSE_RESPONSE_EXTRUDE_MORE);
-    }
+void PauseOptions::extrude_command() {
+  pause_menu_response = PAUSE_RESPONSE_EXTRUDE_MORE;
+}
 
-    void resume_command() {
-      Pages::clear_current();
-      Wait::wait(GET_TEXT_F(MSG_PLEASE_WAIT));
-      ExtUI::setPauseMenuResponse(PAUSE_RESPONSE_RESUME_PRINT);
-    }
+void PauseOptions::resume_command() {
+  wait.wait(F("Please wait..."));
+  pause_menu_response = PAUSE_RESPONSE_RESUME_PRINT;
+}
 
-    void stop_command() {
-      Log::info() << F("PauseOptions::stop_command") << Log::endl();
-      Pages::back_all(Pages::BACK_ALL_OPTIONS::SHOW_MAIN);
-      ExtUI::setPauseMenuResponse(PAUSE_RESPONSE_RESUME_ABORT);
-    }
-
-  }
 }

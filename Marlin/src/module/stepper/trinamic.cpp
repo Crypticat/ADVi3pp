@@ -56,7 +56,6 @@ enum StealthIndex : uint8_t {
 #else
   #define TMC_UART_HW_DEFINE(IC, ST, L, AI) TMCMarlin<IC##Stepper, L, AI> stepper##ST(&ST##_HARDWARE_SERIAL, float(ST##_RSENSE), ST##_SLAVE_ADDRESS)
 #endif
-
 #define TMC_UART_SW_DEFINE(IC, ST, L, AI) TMCMarlin<IC##Stepper, L, AI> stepper##ST(ST##_SERIAL_RX_PIN, ST##_SERIAL_TX_PIN, float(ST##_RSENSE), ST##_SLAVE_ADDRESS)
 
 #define _TMC_SPI_DEFINE(IC, ST, AI) __TMC_SPI_DEFINE(IC, ST, TMC_##ST##_LABEL, AI)
@@ -228,7 +227,7 @@ enum StealthIndex : uint8_t {
     chopconf.intpol = interpolate;
     chopconf.hend = chop_init.hend + 3;
     chopconf.hstrt = chop_init.hstrt - 1;
-    TERN_(EDGE_STEPPING, chopconf.dedge = true);
+    TERN_(SQUARE_WAVE_STEPPING, chopconf.dedge = true);
     st.CHOPCONF(chopconf.sr);
 
     st.rms_current(mA, hold_multiplier);
@@ -263,7 +262,7 @@ enum StealthIndex : uint8_t {
     chopconf.intpol = interpolate;
     chopconf.hend = chop_init.hend + 3;
     chopconf.hstrt = chop_init.hstrt - 1;
-    TERN_(EDGE_STEPPING, chopconf.dedge = true);
+    TERN_(SQUARE_WAVE_STEPPING, chopconf.dedge = true);
     st.CHOPCONF(chopconf.sr);
 
     st.rms_current(mA, hold_multiplier);
@@ -293,7 +292,7 @@ enum StealthIndex : uint8_t {
 //
 // TMC2208/2209 Driver objects and inits
 //
-#if HAS_TMC_UART
+#if HAS_TMC220x
   #if AXIS_HAS_UART(X)
     #ifdef X_HARDWARE_SERIAL
       TMC_UART_DEFINE(HW, X, X);
@@ -685,7 +684,7 @@ enum StealthIndex : uint8_t {
     chopconf.intpol = interpolate;
     chopconf.hend = chop_init.hend + 3;
     chopconf.hstrt = chop_init.hstrt - 1;
-    TERN_(EDGE_STEPPING, chopconf.dedge = true);
+    TERN_(SQUARE_WAVE_STEPPING, chopconf.dedge = true);
     st.CHOPCONF(chopconf.sr);
 
     st.rms_current(mA, hold_multiplier);
@@ -727,7 +726,7 @@ enum StealthIndex : uint8_t {
     chopconf.intpol = interpolate;
     chopconf.hend = chop_init.hend + 3;
     chopconf.hstrt = chop_init.hstrt - 1;
-    TERN_(EDGE_STEPPING, chopconf.dedge = true);
+    TERN_(SQUARE_WAVE_STEPPING, chopconf.dedge = true);
     st.CHOPCONF(chopconf.sr);
 
     st.rms_current(mA, hold_multiplier);
@@ -767,7 +766,7 @@ enum StealthIndex : uint8_t {
     st.sdoff(0);
     st.rms_current(mA);
     st.microsteps(microsteps);
-    TERN_(EDGE_STEPPING, st.dedge(true));
+    TERN_(SQUARE_WAVE_STEPPING, st.dedge(true));
     st.intpol(interpolate);
     st.diss2g(true); // Disable short to ground protection. Too many false readings?
     TERN_(TMC_DEBUG, st.rdsel(0b01));
@@ -785,7 +784,7 @@ enum StealthIndex : uint8_t {
     chopconf.intpol = interpolate;
     chopconf.hend = chop_init.hend + 3;
     chopconf.hstrt = chop_init.hstrt - 1;
-    TERN_(EDGE_STEPPING, chopconf.dedge = true);
+    TERN_(SQUARE_WAVE_STEPPING, chopconf.dedge = true);
     st.CHOPCONF(chopconf.sr);
 
     st.rms_current(mA, hold_multiplier);
@@ -820,7 +819,7 @@ enum StealthIndex : uint8_t {
     chopconf.intpol = interpolate;
     chopconf.hend = chop_init.hend + 3;
     chopconf.hstrt = chop_init.hstrt - 1;
-    TERN_(EDGE_STEPPING, chopconf.dedge = true);
+    TERN_(SQUARE_WAVE_STEPPING, chopconf.dedge = true);
     st.CHOPCONF(chopconf.sr);
 
     st.rms_current(mA, hold_multiplier);

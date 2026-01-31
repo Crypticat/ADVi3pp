@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,12 +20,52 @@
 
 #pragma once
 
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 
-#if ENABLED(ADVi3PP_PROBE)
+namespace ADVi3pp {
 
-namespace ADVi3pp::SensorSettings {
-  bool handle_command(uint16_t key_code);
-}
+#ifdef ADVi3PP_PROBE
+
+struct SensorPosition { int16_t x, y; };
+
+//! Sensor Settings Page
+struct SensorSettings: Screen<SensorSettings> {
+  static constexpr Page PAGE =  Page::SensorSettings;
+  static constexpr Action ACTION = Action::SensorSettings;
+
+private:
+  bool on_enter();
+
+  bool on_dispatch(KeyValue value);
+  void on_save_command();
+
+  void previous_command();
+  void next_command();
+  void highspeed_command();
+  void touch_sw_command();
+  void send_values() const;
+  void send_name() const;
+  void get_values();
+  void send_highspeed_value() const;
+  void send_touch_sw_value() const;
+
+private:
+  uint16_t index_ = 0;
+  bool highspeed_ = false;
+  bool touch_sw_ = false;
+
+  friend Parent;
+};
+
+#else
+
+struct SensorSettings: Screen<SensorSettings> {
+  static constexpr Page PAGE = Page::NoSensor;
+  static constexpr Action ACTION = Action::SensorSettings;
+};
 
 #endif
+
+extern SensorSettings sensor_settings;
+
+}

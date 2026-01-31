@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,40 +18,36 @@
  *
  */
 
-#include "../../core/core.h"
+#include "../../../inc/MarlinConfig.h"
 #include "temperatures.h"
 
-namespace ADVi3pp::Temperatures {
+namespace ADVi3pp {
 
-  inline namespace internals {
-    void (*callback_)(); // Do not put in Pool
+Temperatures temperatures;
 
-    void back_command();
+
+//! Show the temperature page and record and action to be executed when the back button is pressed
+//! @param back Action to be executed when the back button is pressed
+void Temperatures::show(const Callback& back) {
+  back_ = back;
+  Parent::show();
+}
+
+//! Show the temperature page
+//! @param options  Options when displaying the page (i.e. save the current page or not)
+void Temperatures::show() {
+  back_ = nullptr;
+  Parent::show();
+}
+
+//! Execute the Back command
+void Temperatures::on_back_command() {
+  if(back_) {
+    back_();
+    back_ = nullptr;
   }
 
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: display(nullptr); break;
-      case KEY_CODE_BACK: back_command(); break;
-      default: return false;
-    }
-    return true;
-  }
+  Parent::on_back_command();
+}
 
-  //! Show the temperature page and record and action to be executed when the back button is pressed
-  //! @param back Action to be executed when the back button is pressed
-  void display(void (*cb)()) {
-    callback_ = cb;
-    Pages::show(Page::Temperatures);
-  }
-
-  inline namespace internals {
-
-    void back_command() {
-      Log::info() << F("back_command") << Log::endl();
-      if(callback_) callback_();
-      Pages::back(Pages::BACK_OPTIONS::NONE);
-    }
-
-  }
 }

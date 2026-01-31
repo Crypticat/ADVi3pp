@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,245 +19,200 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-
 #ifdef BLTOUCH
 
-#include "../../../feature/bltouch.h"
-#include "../../../lcd/marlinui.h"
-#include "../../../gcode/gcode.h"
-#include "../../lib/ADVstd/bitmasks.h"
-#include "../../core/status.h"
 #include "../../core/core.h"
 #include "../../core/dgus.h"
-#include "../../core/pool.h"
-#include "../common/wait.h"
+#include "../../core/status.h"
+#include "../../core/wait.h"
 #include "bltouch_testing.h"
+#include "../../../feature/bltouch.h" // Use directly the BLTouch class
 
 namespace ADVi3pp {
-  enum class Wires: uint8_t {
-    None    = 0b00000000,
-    Brown   = 0b00000001,
-    Red     = 0b00000010,
-    Orange  = 0b00000100,
-    Black   = 0b00001000,
-    White   = 0b00010000
-  };
-}
-ENABLE_BITMASK_OPERATOR(ADVi3pp::Wires);
 
-namespace ADVi3pp::BlTouchTesting {
+BLTouchTesting bltouch_testing;
 
-  inline namespace internals {
-    constexpr uint16_t KEY_CODE_STEP1_YES = 1;
-    constexpr uint16_t KEY_CODE_STEP1_NO = 2;
-    constexpr uint16_t KEY_CODE_STEP2_SLOW = 3;
-    constexpr uint16_t KEY_CODE_STEP2_QUICK = 4;
-    constexpr uint16_t KEY_CODE_STEP2_NO = 5;
-    constexpr uint16_t KEY_CODE_STEP3_YES = 6;
-    constexpr uint16_t KEY_CODE_STEP3_NO = 7;
+inline bool triggered() { return Z_MIN_ENDSTOP_INVERTING != READ(Z_MIN_PIN); }
 
-    struct Data {
-      Wires tested_ = Wires::None;
-      Wires ok_ = Wires::None;
-    };
+static void status_red_brown()   { status.set(F("Check red (VCC) and brown (GND) wires")); }
+static void status_orange()      { status.set(F("Check the orange (Servo) wire")); }
+static void status_white_black() { status.set(F("Check white (Z-stop) and black (GND) wires")); }
+static void status_pin()         { status.set(F("Check the pin of the BLTouch")); }
 
-    inline Data& pool() { return Pool::get<Data>(Page::BlTouchTesting1); }
 
-    void show_command();
-    void back_command();
-    void save_command();
-
-    void step_1_yes();
-    void step_1_no();
-    void step_2();
-    void step_2_slow();
-    void step_2_quick();
-    void step_2_no();
-    void step_3();
-    void step_3_yes();
-    void step_3_no();
-    void step_4();
-    void step_5();
-    uint16_t wire_value(Wires wire);
-  }
-
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: show_command(); break;
-      case KEY_CODE_BACK: back_command(); break;
-      case KEY_CODE_SAVE: save_command(); break;
-      case KEY_CODE_STEP1_YES: step_1_yes(); break;
-      case KEY_CODE_STEP1_NO: step_1_no(); break;
-      case KEY_CODE_STEP2_SLOW: step_2_slow(); break;
-      case KEY_CODE_STEP2_QUICK: step_2_quick(); break;
-      case KEY_CODE_STEP2_NO: step_2_no(); break;
-      case KEY_CODE_STEP3_YES: step_3_yes(); break;
-      case KEY_CODE_STEP3_NO: step_3_no(); break;
-      default: return false;
-    }
+//! Execute a command
+//! @param key_value    The sub-action to handle
+//! @return             True if the action was handled
+bool BLTouchTesting::on_dispatch(KeyValue key_value) {
+  if(Parent::on_dispatch(key_value))
     return true;
+
+  switch(key_value) {
+    case KeyValue::BLTouchTestingStep1aYes:   step_1a_yes(); break;
+    case KeyValue::BLTouchTestingStep1aNo:    step_1a_no(); break;
+    case KeyValue::BLTouchTestingStep1bSlow:  step_1b_slow(); break;
+    case KeyValue::BLTouchTestingStep1bQuick: step_1b_quick(); break;
+    case KeyValue::BLTouchTestingStep1bNo:    step_1b_no(); break;
+    case KeyValue::BLTouchTestingStep2Yes:    step_2_yes(); break;
+    case KeyValue::BLTouchTestingStep2No:     step_2_no(); break;
+    default: return false;
   }
 
-  inline namespace internals {
+  return true;
+}
 
-    const Status::STATUS_OPTIONS OPTIONS = Status::STATUS_OPTIONS::RESET | Status::STATUS_OPTIONS::PERSISTENT;
-    inline void status_red_brown()   { Status::set(GET_TEXT_F(ADVI3PP_MSG_BLTOUCH_RED_BROWN), OPTIONS); }
-    inline void status_orange()      { Status::set(GET_TEXT_F(ADVI3PP_MSG_BLTOUCH_ORANGE), OPTIONS); }
-    inline void status_white_black() { Status::set(GET_TEXT_F(ADVI3PP_MSG_BLTOUCH_WHITE_BLACK), OPTIONS); }
-    inline void status_pin()         { Status::set(GET_TEXT_F(ADVI3PP_MSG_BLTOUCH_PIN), OPTIONS); }
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool BLTouchTesting::on_enter() {
+  pages.save_forward_page();
+  step_1a();
+  return true;
+}
 
-    inline uint16_t wire_value(Wires wire) {
-      return test_one_bit(pool().ok_, wire) ? 1 : test_one_bit(pool().tested_, wire) ? 2 : 0;
-    }
+void BLTouchTesting::on_back_command() {
+  bltouch._reset();;
+  Parent::on_back_command();
+}
 
-    void show_command() {
-      if(!Core::check_not_busy()) return;
-      Pool::reset<Data>(Page::BlTouchTesting1);
-      Status::set(GET_TEXT_F(ADVI3PP_MSG_BLTOUCH_TESTING), OPTIONS);
-      Pages::save_forward_page();
-      pool().tested_ = pool().ok_ = Wires::None;
-      set_bits(pool().tested_, Wires::Brown | Wires::Red);
-      Pages::show(Page::BlTouchTesting1);
-      bltouch._reset();
-    }
+void BLTouchTesting::on_abort() {
+  bltouch._reset();
+}
 
-    void back_command() {
-      bltouch._reset();
-      Pages::back(Pages::BACK_OPTIONS::FINISH_MOVE);
-    }
+void BLTouchTesting::on_save_command() {
+  // Do not call parent, there nothing to save
+  pages.show_forward_page();
+}
 
-    void save_command() {
-      Pages::save(Pages::SAVE_OPTIONS::NOTHING, Pages::BACK_OPTIONS::FINISH_MOVE);
-    }
+//! Test if the BLTouch is powered
+void BLTouchTesting::step_1a() {
+  tested_ = ok_ = Wires::None;
+  set_bits(tested_, Wires::Brown | Wires::Red);
+  bltouch._reset();
+}
 
-    void step_1_yes() {
-      step_2();
-    }
+void BLTouchTesting::step_1a_yes() {
+  step_1b();
+}
 
-    void step_1_no() {
-      status_red_brown();
-      step_5();
-    }
+void BLTouchTesting::step_1a_no() {
+  status_red_brown();
+  step_4();
+}
 
-    //! Is the BLTouch blinking?
-    void step_2() {
-      Pages::show(Page::BlTouchTesting2);
-    }
+//! Is the BLTouch blinking?
+void BLTouchTesting::step_1b() {
+  pages.show(Page::BLTouchTesting1B, ACTION);
+}
 
-    void step_2_no() {
-      set_bits(pool().ok_, Wires::Brown | Wires::Red);
-      step_3();
-    }
+void BLTouchTesting::step_1b_no() {
+  set_bits(ok_, Wires::Brown | Wires::Red);
+  step_2();
+}
 
-    void step_2_slow() {
-      status_red_brown();
-      step_5();
-    }
+void BLTouchTesting::step_1b_slow() {
+  status_red_brown();
+  step_4();
+}
 
-    void step_2_quick() {
-      status_pin();
-      step_5();
-    }
+void BLTouchTesting::step_1b_quick() {
+  status_pin();
+  step_4();
+}
 
-    //! BLTouch deploy and stow (self test)
-    void step_3() {
-      set_bits(pool().tested_, Wires::Orange);
-      Pages::show(Page::BlTouchTesting3);
-      bltouch._selftest();
-    }
+//! BLTouch deploy and stow (self test)
+void BLTouchTesting::step_2() {
+  set_bits(tested_, Wires::Orange);
+  pages.show(Page::BLTouchTesting2, ACTION);
+  bltouch._selftest();
+}
 
-    void step_3_yes() {
-      set_bits(pool().ok_, Wires::Orange);
-      step_4();
-    }
+void BLTouchTesting::step_2_yes() {
+  set_bits(ok_, Wires::Orange);
+  step_3();
+}
 
-    void step_3_no() {
-      status_orange();
-      step_5();
-    }
+void BLTouchTesting::step_2_no() {
+  status_orange();
+  step_4();
+}
 
-    void step_4() {
-      set_bits(pool().tested_, Wires::White | Wires::Black);
+void BLTouchTesting::step_3() {
+  set_bits(tested_, Wires::White | Wires::Black);
 
-      Wait::wait(GET_TEXT_F(ADVI3PP_MSG_BLTOUCH_TRIGGER));
+  wait.wait(F("Testing BLTouch triggering, please wait..."));
 
-      // Adapted from M43 code
-      // This code will try to detect a BLTouch probe
-      SET_INPUT_PULLUP(Z_MIN_PROBE_PIN);
-      bltouch._reset();
-      bltouch._stow();
-      if(READ(Z_MIN_PROBE_PIN) == Z_MIN_ENDSTOP_HIT_STATE) { status_white_black(); step_5(); return; }
+  // Adapted from M43 code
+  // This code will try to detect a BLTouch probe
+  bltouch._reset();
+  bltouch._stow();
+  if(triggered()) { status_white_black(); step_4(); return; }
 
-      bltouch._set_SW_mode();
-      if(READ(Z_MIN_PROBE_PIN) != Z_MIN_ENDSTOP_HIT_STATE) { status_white_black(); step_5(); return; }
+  bltouch._set_SW_mode();
+  if(!triggered()) { status_white_black(); step_4(); return; }
 
-      bltouch._deploy();
-      if(READ(Z_MIN_PROBE_PIN) == Z_MIN_ENDSTOP_HIT_STATE) { status_white_black(); step_5(); return; }
+  bltouch._deploy();
+  if(triggered()) { status_white_black(); step_4(); return; }
 
-      bltouch._stow();
+  bltouch._stow();
 
-      // BLTouch Classic 1.2, 1.3, Smart 1.0, 2.0, 2.2, 3.0, 3.1 detected
-      // Check for a 3.1 by letting the user trigger it, later
+  // BLTouch Classic 1.2, 1.3, Smart 1.0, 2.0, 2.2, 3.0, 3.1 detected
+  // Check for a 3.1 by letting the user trigger it, later
 
-      bltouch._deploy();
-      safe_delay(500);
+  bltouch._deploy();
+  safe_delay(500);
 
-      Pages::show(Page::BlTouchTesting4);
+  pages.show(Page::BLTouchTesting3, ACTION);
 
-      // Wait 30 seconds for user to trigger probe
-      for(uint16_t j = 0; j < 500 * 30; j++) {
-        safe_delay(2);
+  // Wait 30 seconds for user to trigger probe
+  for(uint16_t j = 0; j < 500 * 30; j++) {
+    safe_delay(2);
 
-        if(0 == j % (500 * 1)) gcode.reset_stepper_timeout();    // Keep steppers powered
+    if(0 == j % (500 * 1)) gcode.reset_stepper_timeout();    // Keep steppers powered
 
-        if(READ(Z_MIN_PROBE_PIN) == Z_MIN_ENDSTOP_HIT_STATE) {
-          uint16_t probe_counter = 0; // Pulse width / 2
-          for(probe_counter = 0; probe_counter < 15 && READ(Z_MIN_PROBE_PIN); ++probe_counter) safe_delay(2);
-          Log::info() << F("BLTouch pulse width 0x") << probe_counter << Log::endl();
+    if(triggered()) {
+      uint16_t probe_counter = 0; // Pulse width / 2
+      for(probe_counter = 0; probe_counter < 15 && triggered(); ++probe_counter) safe_delay(2);
+      Log::log() << F("BLTouch pulse width 0x") << probe_counter << Log::endl();
 
-          if(probe_counter < 4) {
-            Status::set(GET_TEXT_F(ADVI3PP_MSG_BLTOUCH_NOISE), OPTIONS);
-            step_5();
-            return;
-          }
-
-          if(probe_counter == 15)
-            Status::set(GET_TEXT_F(ADVI3PP_MSG_BLTOUCH_3_1), Status::STATUS_OPTIONS::RESET);
-          else
-            Status::set(GET_TEXT_F(ADVI3PP_MSG_BLTOUCH_3_0), Status::STATUS_OPTIONS::RESET);
-
-          bltouch._stow();
-          set_bits(pool().ok_, Wires::White | Wires::Black);
-          step_5();
-          return;
-        }
+      wait.wait();
+      if(probe_counter < 4) {
+        status.set(F("Noise detected"));
+        step_4();
+        return;
       }
 
-      status_white_black();
-      step_5();
+      status.set(probe_counter == 15 ? F("BLTouch 3.1 detected") : F("BLTouch V3.0 or lower detected"));
+      bltouch._stow();
+      set_bits(ok_, Wires::White | Wires::Black);
+      step_4();
+      return;
     }
-
-    void step_5() {
-      bltouch._reset();
-
-      auto brown = wire_value(Wires::Brown);
-      auto red = wire_value(Wires::Red);
-      auto orange = wire_value(Wires::Orange);
-      auto black = wire_value(Wires::Black);
-      auto white = wire_value(Wires::White);
-
-      WriteRamRequest{Variable::Value0}.write_words(
-          brown,
-          red,
-          orange,
-          black,
-          white
-      );
-
-      Pages::show(Page::BlTouchTesting5);
-    }
-
   }
+
+  status_white_black();
+  step_4();
+}
+
+void BLTouchTesting::step_4() {
+  bltouch._reset();
+
+  auto brown = wire_value(Wires::Brown);
+  auto red = wire_value(Wires::Red);
+  auto orange = wire_value(Wires::Orange);
+  auto black = wire_value(Wires::Black);
+  auto white = wire_value(Wires::White);
+
+  WriteRamRequest{Variable::Value0}.write_words(
+    brown,
+    red,
+    orange,
+    black,
+    white
+  );
+
+  pages.show(Page::BLTouchTesting4, ACTION);
+}
+
 }
 
 #endif

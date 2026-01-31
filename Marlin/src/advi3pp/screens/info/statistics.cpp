@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,54 +19,40 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-#include "../../../lcd/extui/ui_api.h"
 #include "statistics.h"
+#include "../../core/string.h"
 #include "../../core/dgus.h"
 
-#if ENABLED(PRINTCOUNTER)
+namespace ADVi3pp {
 
-namespace ADVi3pp::Statistics {
+Statistics statistics;
 
-  inline namespace internals {
-    void show_command();
-    void back_command();
-    void send_stats();
-  }
-
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: show_command(); break;
-      case KEY_CODE_BACK: back_command(); break;
-      default: return false;
-    }
-    return true;
-  }
-
-  inline namespace internals {
-
-    void show_command() {
-      send_stats();
-      Pages::show(Page::Statistics);
-    }
-
-    void back_command() {
-      Pages::back(Pages::BACK_OPTIONS::NONE);
-    }
-
-    void send_stats() {
-      WriteRamRequest{Variable::Value0}.write_words(
-        ExtUI::getTotalPrints(),
-        ExtUI::getFinishedPrints(),
-        freeMemory()
-      );
-
-      // Minimize the RAM used so send each value separately.
-      char buffer[21];
-      WriteRamRequest{Variable::LongText0}.write_text(ExtUI::getTotalPrintTime_str(buffer), LONG_TEXT_LENGTH);
-      WriteRamRequest{Variable::LongText1}.write_text(ExtUI::getLongestPrint_str(buffer), LONG_TEXT_LENGTH);
-      WriteRamRequest{Variable::LongText2}.write_text(ExtUI::getFilamentUsed_str(buffer), LONG_TEXT_LENGTH);
-    }
-
-  }
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool Statistics::on_enter() {
+  send_stats();
+  return true;
 }
-#endif
+
+void Statistics::send_stats() {
+  WriteRamRequest{Variable::Value0}.write_words(
+    ExtUI::getTotalPrints(),
+    ExtUI::getFinishedPrints(),
+    freeMemory()
+  );
+
+  // Minimize the RAM used so send each value separately.
+  char buffer[21];
+  ADVString<16> value;
+
+  value.set(ExtUI::getTotalPrintTime_str(buffer));
+  WriteRamRequest{Variable::LongText0}.write_text(value);
+
+  value.set(ExtUI::getLongestPrint_str(buffer));
+  WriteRamRequest{Variable::LongText1}.write_text(value);
+
+  value.set(ExtUI::getFilamentUsed_str(buffer));
+  WriteRamRequest{Variable::LongText2}.write_text(value);
+}
+
+}

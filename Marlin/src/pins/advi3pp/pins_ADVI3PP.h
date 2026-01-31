@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2020 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,30 +33,30 @@
 //
 // Limit Switches
 //
-#define X_STOP_PIN              54   // PF0 / A0 - D54
-#define Y_STOP_PIN              24   // PA2 / D24
+#define X_STOP_PIN              54   // PF0 / ADC0 - A0
+#define Y_STOP_PIN              24   // PA2 / AD2
 
 #if MB(ADVI3PP_I3_PLUS_51)
   #if ENABLED(BLTOUCH)
-    #define Z_STOP_PIN          25   // PA3 / D25
-    #define Z_MIN_PROBE_PIN     25   // PA3 / D25
-    #define SERVO0_PIN          40   // PG1 / D40 - EXT1
+    #define Z_STOP_PIN          25   // PA3 / AD3
+    #define Z_MIN_PROBE_PIN     25   // PA3 / AD3
+    #define SERVO0_PIN          40   // PG1 / !RD
   #else
-    #define Z_STOP_PIN          23   // PA1 / D23
+    #define Z_STOP_PIN          23   // PA1 / AD1
   #endif
 #elif MB(ADVI3PP_I3_PLUS_52C)
-  #define Z_STOP_PIN             6   // PH3 / D6
-  #define Z_MIN_PROBE_PIN        6   // PH3 / D6
+  #define Z_STOP_PIN             6   // PH3 / PWM6
+  #define Z_MIN_PROBE_PIN        6   // PH3 / PCINT8
   #if ENABLED(BLTOUCH)
-    #define SERVO0_PIN          40   // PG1 / D40 - EXT1
+    #define SERVO0_PIN          40   // PG1 / !RD
   #endif
 #elif MB(ADVI3PP_I3_PLUS_54)
-  #define Z_STOP_PIN             6   // PH3 / D6
-  #define Z_MIN_PROBE_PIN        6   // PH3 / D6
+  #define Z_STOP_PIN             6   // PH3 / PCINT8
+  #define Z_MIN_PROBE_PIN        6   // PH3 / PCINT8
   #if ENABLED(BLTOUCH)
     // Assummes you are using a sub board from MR.S.J.D Developments
     // https://oshwlab.com/MrGamecase/wanhao-duplicator-i3-mkii-subboard
-    #define SERVO0_PIN           7   // PH4 / D7
+    #define SERVO0_PIN           7   // PG1 / !RD
   #endif
 #else
   #error "Unknown ADVi3++ mainboard"
@@ -65,82 +65,64 @@
 //
 // Steppers
 //
-#define X_STEP_PIN              61  // PF7 / A7 - D61
-#define X_DIR_PIN               62  // PK0 / A8 - D62
-#define X_ENABLE_PIN            60  // PF6 / A6 - D60
+#define X_STEP_PIN              61  // PF7 / A7
+#define X_DIR_PIN               62  // PK0 / A8
+#define X_ENABLE_PIN            60  // PF6 / A6
 
-#define Y_STEP_PIN              64  // PK2 / A10 - D64
-#define Y_DIR_PIN               65  // PK3 / A11 - D65
+#define Y_STEP_PIN              64  // PK2 / A10
+#define Y_DIR_PIN               65  // PK3 / A11
 #if MB(ADVI3PP_I3_PLUS_51) || MB(ADVI3PP_I3_PLUS_52C)
-  #define Y_ENABLE_PIN          63  // PK1 / A9 - D63
+  #define Y_ENABLE_PIN          63  // PK1 / A9
 #elif MB(ADVI3PP_I3_PLUS_54)
-  #define Y_ENABLE_PIN           2  // PE4 / D2
+  #define Y_ENABLE_PIN           2  // PE4 / INT4
 #else
 #error "Unknown i3 Plus mainboard"
 #endif
 
-#define Z_STEP_PIN              67  // PK5 / A13 - D67
-#define Z_DIR_PIN               69  // PK7 / A15 - D69
-#define Z_ENABLE_PIN            66  // PK4 / A12 - D66
+#define Z_STEP_PIN              67  // PK5 / A13
+#define Z_DIR_PIN               69  // PK7 / A15
+#define Z_ENABLE_PIN            66  // PK4 / A12
 
-#define E0_STEP_PIN             58  // PF4 / A4 - D58
-#define E0_DIR_PIN              59  // PF5 / A5 - D59
-#define E0_ENABLE_PIN           57  // PF3 / A3 - D57
+#define E0_STEP_PIN             58  // PF4 / A4
+#define E0_DIR_PIN              59  // PF5 / A5
+#define E0_ENABLE_PIN           57  // PF3 / A3
 
 //
 // Temperature Sensors
 //
-#define TEMP_0_PIN               1  // PF1 / A1 - D55
-#define TEMP_BED_PIN            14  // PK6 / A14 - D68
+#define TEMP_0_PIN              1  // PF1 / A1   Analog
+#define TEMP_BED_PIN           14  // PK6 / A14  Analog
 
 //
 // Heaters / Fans
 //
-#define HEATER_0_PIN             4  // PG5 / D4
-#define HEATER_BED_PIN           3  // PE5 / D3
+#define HEATER_0_PIN            4  // PG5 / PWM4
+#define HEATER_BED_PIN          3  // PE5 / PWM3
 
-#define FAN0_PIN                 5  // PE3 / D5
+#define FAN0_PIN                5  // PE3 / PWM5
 
 //
 // Filament Runout sensor
 //
-#define FIL_RUNOUT_PIN          36 // PC1 / D36 - EXT3
+#define FIL_RUNOUT_PIN          36 // PC1 / A9
 
 //
 // SD card
 //
-#define SD_DETECT_PIN           49  // PL0 / D49
-#define SD_MISO_PIN             50  // PB3 / D50
-#define SD_MOSI_PIN             51  // PB2 / D51
-#define SD_SCK_PIN              52  // PB1 / SCK - D52
-#define SD_SS_PIN               53  // PB0 / SS - D53
+#define SD_DETECT_PIN          49  // PL0
+#define SD_MISO_PIN            50  // PB3
+#define SD_MOSI_PIN            51  // PB2
+#define SD_SCK_PIN             52  // PB1
+#define SD_SS_PIN              53  // PB0 / SS
+#define SDSS                   SD_SS_PIN
 
 //
 // Misc. Functions
 //
-#define LED_PIN                 13  // PB7 / D13
+#define LED_PIN                13  // PB7 / PWM13
 
-// Power Control
-// Only Balco (mainboard v5.2c) has a built-in PSU controller
-#if MB(ADVI3PP_I3_PLUS_52C)
-#define PS_ON_PIN                8   // PH5 / D8
-#else
-// Add-on (for e. BIGTREETECH Relay V1.2)
-#define PS_ON_PIN               32  // PC5 / D32 - EXT7
-#endif
 
-// Power Loss
-// Only Mark II (mainboard v5.4) has a built-in Powerloss detection
-// POWER_LOSS_PIN is an alias of PL_PIN in Configuration_adv.h
-#if MB(ADVI3PP_I3_PLUS_54)
-#define PL_PIN                  63  // PK1 / A9 - D63
-#elif MB(ADVI3PP_I3_PLUS_52C)
-// Add-on (for e. BIGTREETECH Relay V1.2) on existing connector (J3)
-#define PL_PIN                  2   // PE4 / D2
-#else
-// Add-on (for e. BIGTREETECH Relay V1.2)
-#define PL_PIN                  34  // PC3 / D34 - EXT5
-#endif
+
 
 /**
  *  == EXT connector ==
@@ -152,12 +134,12 @@
  *       #---------------#
  *         1  3  5  7  9
  *
- * ############################################
- * # Pin | ATMEGA2560 Pin | Arduino # ADVi3++ #
- * ############################################
- * #  1  | 52 / PG1 (!RD) |    40   # SERVO0_PIN #
- * #  2  | 95 / PF2 (A2)  |    56   # POWER_LOSS_PIN #
- * #  3  | 54 / PC1 (A9)  |    36   # FIL_RUNOUT_PIN #
+ * ##################################
+ * # Pin | ATMEGA2560 Pin | Arduino #
+ * ##################################
+ * #  1  | 52 / PG1 (!RD) |    40   #
+ * #  2  | 95 / PF2 (A2)  |    56   #
+ * #  3  | 54 / PC1 (A9)  |    36   #
  * #  4  | 53 / PC0 (A8)  |    37   #
  * #  5  | 56 / PC3 (A11) |    34   #
  * #  6  | 55 / PC2 (A10) |    35   #

@@ -25,23 +25,24 @@
 
 namespace adv {
 
-  // --------------------------------------------------------------------
-  // Curiously Recurring Template Pattern
-  // More or less from: https://www.fluentcpp.com/2017/05/19/crtp-helper/
-  // --------------------------------------------------------------------
+// --------------------------------------------------------------------
+// Curiously Recurring Template Pattern
+// More or less from: https://www.fluentcpp.com/2017/05/19/crtp-helper/
+// --------------------------------------------------------------------
 
-  template <typename Self, template<typename> class P>
-  struct Crtp {
-      Self& self()             { return static_cast<Self&>(*this); }
-      Self const& self() const { return static_cast<Self const&>(*this); }
+template <typename Self, template<typename> class P>
+struct Crtp
+{
+    Self& self()             { return static_cast<Self&>(*this); }
+    Self const& self() const { return static_cast<Self const&>(*this); }
 
-  protected:
-      using Parent = P<Self>;
+protected:
+    using Parent = P<Self>;
 
-  private:
-      Crtp() = default;
-      friend Parent;
-  };
+private:
+    Crtp() = default;
+    friend Parent;
+};
 
 }
 

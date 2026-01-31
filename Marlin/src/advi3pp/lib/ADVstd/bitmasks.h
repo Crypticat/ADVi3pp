@@ -23,6 +23,7 @@
 
 #include "ADVstd.h"
 
+namespace ADVi3pp {
 
 template<bool B, class T = void>
 struct enable_if {};
@@ -34,7 +35,7 @@ struct enable_if<true, T> { typedef T type; };
 template<typename E>
 struct enable_bitmask_operators
 {
-    static constexpr bool enable = false;
+    static const bool enable = false;
 };
 
 template<typename E>
@@ -153,5 +154,10 @@ get_cleared_bits(E lhs, E rhs)
     return lhs & ~rhs;
 }
 
+
+
+
 #define ENABLE_BITMASK_OPERATOR(E) \
-template<> struct enable_bitmask_operators<E> { static constexpr bool enable = true; }
+template<> struct enable_bitmask_operators<E> { static const bool enable = true; }
+
+}

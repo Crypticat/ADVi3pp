@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,181 +19,154 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-#include "../../../lcd/extui/ui_api.h"
 #include "../../core/core.h"
-#include "../../core/status.h"
-#include "../../core/pool.h"
-#include "../common/wait.h"
-#include "../common/set_temperature.h"
+#include "../../core/wait.h"
 #include "z_height.h"
 
-#if ENABLED(ADVi3PP_PROBE)
+namespace ADVi3pp {
 
-namespace ADVi3pp::SensorZHeight {
+namespace {
+  constexpr xyz_feedrate_t homing_feedrate_mm_m = HOMING_FEEDRATE_MM_M;
+  constexpr float FEEDRATE_XY = MMM_TO_MMS(homing_feedrate_mm_m.x);
+  constexpr float FEEDRATE_Z = MMM_TO_MMS(homing_feedrate_mm_m.z);
+  constexpr unsigned MINIMAL_CLICK_DELAY = 200; // ms
+}
 
-  inline namespace internals {
-    constexpr xyz_feedrate_t homing_feedrate_mm_m = HOMING_FEEDRATE_MM_M;
-    constexpr float FEEDRATE_XY = MMM_TO_MMS(homing_feedrate_mm_m.x);
-    constexpr float FEEDRATE_Z = MMM_TO_MMS(homing_feedrate_mm_m.z);
-    constexpr uint16_t KEY_CODE_PLUS = 1;
-    constexpr uint16_t KEY_CODE_MINUS = 2;
-    constexpr uint16_t KEY_CODE_MULTIPLIER_1 = 3;
-    constexpr uint16_t KEY_CODE_MULTIPLIER_2 = 4;
-    constexpr uint16_t KEY_CODE_MULTIPLIER_3 = 5;
-    constexpr Variable VAR_MULTIPLIER = Variable::Value0;
+SensorZHeight sensor_z_height;
 
-    enum class Multiplier: uint8_t { M1, M2, M3 };
+#ifdef ADVi3PP_PROBE
 
-    struct Data {
-      float old_offset_ = 0;
-      Multiplier multiplier_ = Multiplier::M1;
-    };
+const double SENSOR_Z_HEIGHT_MULTIPLIERS[] = {0.02, 0.10, 1.0};
 
-    inline Data& pool() { return Pool::get<Data>(Page::ZHeightTuning); }
-
-    void show_command();
-    void back_command();
-    void save_command();
-    void minus_command();
-    void plus_command();
-    void multiplier1_command();
-    void multiplier2_command();
-    void multiplier3_command();
-
-    float get_multiplier_value();
-    void adjust_height(float offset);
-    void send_data();
-  }
-
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: show_command(); break;
-      case KEY_CODE_BACK: back_command(); break;
-      case KEY_CODE_SAVE: save_command(); break;
-      case KEY_CODE_PLUS: minus_command(); break;
-      case KEY_CODE_MINUS: plus_command(); break;
-      case KEY_CODE_MULTIPLIER_1: multiplier1_command(); break;
-      case KEY_CODE_MULTIPLIER_2: multiplier2_command(); break;
-      case KEY_CODE_MULTIPLIER_3: multiplier3_command(); break;
-      default: return false;
-    }
+//! Handle Sensor Z Height command
+//! @param key_value    The sub-action to handle
+//! @return             True if the action was handled
+bool SensorZHeight::on_dispatch(KeyValue key_value) {
+  if(Parent::on_dispatch(key_value))
     return true;
+
+  switch(key_value) {
+    case KeyValue::Multiplier1:     multiplier1_command(); break;
+    case KeyValue::Multiplier2:     multiplier2_command(); break;
+    case KeyValue::Multiplier3:     multiplier3_command(); break;
+    default:                        return false;
   }
 
-  inline namespace internals {
+  return true;
+}
 
-    // Use a function to save RAM
-    float get_z_height_multiplier(size_t index) {
-      switch(index) {
-        case 0: return 0.02;
-        case 1: return 0.10;
-        case 2: return 1.0;
-        default: Log::error() << F("Invalid z height multiplier index") << Log::endl(); break;
-      }
-      return 1.0;
-    }
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool SensorZHeight::on_enter() {
+  pages.save_forward_page();
 
-    void show_command() {
-      if(!Core::check_not_busy()) return;
+  old_offset_ = ExtUI::getZOffset_mm();
+  last_click_time_ = 0;
+  ExtUI::setZOffset_mm(0); // Before homing otherwise, Marlin is lost
+  ExtUI::setAbsoluteZAxisPosition_mm(ExtUI::getAxisPosition_mm(ExtUI::Z) + old_offset_);
 
-      SetTemperature::extruder([] (CALLBACK_SOURCE src) -> void {
-        if(src == CALLBACK_SOURCE::BACK) {
-          Pages::back(Pages::BACK_OPTIONS::NONE);
-          return;
-        }
+  wait.homing(WaitCallback{this, &SensorZHeight::on_homed});
+  return false;
+}
 
-        Pool::reset<Data>(Page::ZHeightTuning);
-        Status::reset();
+//! Reset Sensor Z Height data.
+void SensorZHeight::reset() {
+  multiplier_ = Multiplier::M1;
+}
 
-        pool().old_offset_ = ExtUI::getZOffset_mm();
-        ExtUI::setZOffset_mm(0); // Before homing otherwise, Marlin is lost
-        ExtUI::setAbsoluteZAxisPosition_mm(ExtUI::getAxisPosition_mm(ExtUI::Z) + pool().old_offset_);
+//! Check if the printer is homed, and continue the Z Height Tuning process.
+bool SensorZHeight::on_homed() {
+  pages.show(PAGE, ACTION);
+  reset();
 
-        Wait::homing([] () -> void {
-          float positions[2] = {X_CENTER, Y_CENTER};
-          ExtUI::axis_t axis[2] = { ExtUI::X, ExtUI::Y };
-          ExtUI::setMultipleAxisPosition_mm(2, positions, axis, FEEDRATE_XY);
-          ExtUI::setAxisPosition_mm(0, ExtUI::Z, FEEDRATE_Z);
-          ExtUI::setSoftEndstopState(false);
+  float positions[2] = {X_CENTER, Y_CENTER};
+  ExtUI::axis_t axis[2] = { ExtUI::X, ExtUI::Y };
+  ExtUI::setMultipleAxisPosition_mm(2, positions, axis, FEEDRATE_XY);
+  ExtUI::setAxisPosition_mm(0, ExtUI::Z, FEEDRATE_Z);
+  ExtUI::setSoftEndstopState(false);
 
-          send_data();
-          Pages::show(Page::ZHeightTuning);
-        });
-      }, SetTemperature::OPTIONS::INIT_ZERO);
-    }
+  send_data();
+  return true;
+}
 
-    //! Handles the Save (Continue) command
-    void save_command() {
-      ExtUI::setTargetTemp_celsius(0, ExtUI::H0);
-      Wait::wait();
-      // Current Z position becomes Z offset
-      ExtUI::setSoftEndstopState(true);
-      ExtUI::setZOffset_mm(ExtUI::getAxisPosition_mm(ExtUI::Z));
-      ExtUI::setAbsoluteZAxisPosition_mm(0);
-      ExtUI::setAxisPosition_mm(Z_AFTER_HOMING, ExtUI::Z, FEEDRATE_Z);
-      Pages::save(Pages::SAVE_OPTIONS::SETTINGS, Pages::BACK_OPTIONS::FINISH_MOVE);
-    }
+//! Execute the Back command
+void SensorZHeight::on_back_command() {
+  ExtUI::setSoftEndstopState(true);
+  ExtUI::setZOffset_mm(old_offset_);
+  ExtUI::setAbsoluteZAxisPosition_mm(ExtUI::getAxisPosition_mm(ExtUI::Z) - old_offset_);
+  ExtUI::setAxisPosition_mm(Z_AFTER_HOMING, ExtUI::Z, FEEDRATE_Z);
+  Parent::on_back_command();
+}
 
-    void back_command() {
-      ExtUI::setTargetTemp_celsius(0, ExtUI::H0);
-      ExtUI::setSoftEndstopState(true);
-      ExtUI::setZOffset_mm(pool().old_offset_);
-      ExtUI::setAbsoluteZAxisPosition_mm(ExtUI::getAxisPosition_mm(ExtUI::Z) - pool().old_offset_);
-      ExtUI::setAxisPosition_mm(Z_AFTER_HOMING, ExtUI::Z, FEEDRATE_Z);
-      Pages::back(Pages::BACK_OPTIONS::FINISH_MOVE);
-    }
+void SensorZHeight::on_abort() {
+  ExtUI::setSoftEndstopState(true);
+  ExtUI::setZOffset_mm(old_offset_);
+}
 
-    //! Change the position of the nozzle (-Z).
-    void minus_command() {
-      adjust_height(-get_multiplier_value());
-    }
 
-    //! Change the position of the nozzle (+Z).
-    void plus_command() {
-      adjust_height(+get_multiplier_value());
-    }
+//! Handles the Save (Continue) command
+void SensorZHeight::on_save_command() {
+  // Current Z position becomes Z offset
+  ExtUI::setSoftEndstopState(true);
+  ExtUI::setZOffset_mm(ExtUI::getAxisPosition_mm(ExtUI::Z));
+  ExtUI::setAbsoluteZAxisPosition_mm(0);
+  ExtUI::setAxisPosition_mm(Z_AFTER_HOMING, ExtUI::Z, FEEDRATE_Z);
+  Parent::on_save_command();
+}
 
-    //! Change the multiplier.
-    void multiplier1_command() {
-      pool().multiplier_ = Multiplier::M1;
-      send_data();
-    }
+//! Change the multiplier.
+void SensorZHeight::multiplier1_command() {
+  multiplier_ = Multiplier::M1;
+  send_data();
+}
 
-    //! Change the multiplier.
-    void multiplier2_command() {
-      pool().multiplier_ = Multiplier::M2;
-      send_data();
-    }
+//! Change the multiplier.
+void SensorZHeight::multiplier2_command() {
+  multiplier_ = Multiplier::M2;
+  send_data();
+}
 
-    //! Change the multiplier.
-    void multiplier3_command() {
-      pool().multiplier_ = Multiplier::M3;
-      send_data();
-    }
+//! Change the multiplier.
+void SensorZHeight::multiplier3_command() {
+  multiplier_ = Multiplier::M3;
+  send_data();
+}
 
-    //! Get the current multiplier value on the LCD panel.
-    float get_multiplier_value() {
-      if(pool().multiplier_ < Multiplier::M1 || pool().multiplier_ > Multiplier::M3) {
-        Log::error() << F("Invalid multiplier value: ") << static_cast<uint16_t >(pool().multiplier_) << Log::endl();
-        return get_z_height_multiplier(0);
-      }
+//! Change the position of the nozzle (-Z).
+void SensorZHeight::minus() {
+  adjust_height(-get_multiplier_value());
+}
 
-      return get_z_height_multiplier(static_cast<uint16_t>(pool().multiplier_));
-    }
+//! Change the position of the nozzle (+Z).
+void SensorZHeight::plus() {
+  adjust_height(+get_multiplier_value());
+}
 
-    //! Adjust the Z height.
-    //! @param offset Offset for the adjustment.
-    void adjust_height(float offset) {
-      ExtUI::setAxisPosition_mm(ExtUI::getAxisPosition_mm(ExtUI::Z) + offset, ExtUI::Z, FEEDRATE_Z);
-      send_data();
-    }
-
-    //! Send the current data (i.e. multiplier) to the LCD panel.
-    void send_data() {
-      WriteRamRequest{VAR_MULTIPLIER}.write_words(pool().multiplier_, ExtUI::getAxisPosition_mm(ExtUI::Z) * 100);
-    }
-
+//! Get the current multiplier value on the LCD panel.
+double SensorZHeight::get_multiplier_value() const {
+  if(multiplier_ < Multiplier::M1 || multiplier_ > Multiplier::M3)     {
+    Log::error() << F("Invalid multiplier value: ") << static_cast<uint16_t >(multiplier_) << Log::endl();
+    return SENSOR_Z_HEIGHT_MULTIPLIERS[0];
   }
+
+  return SENSOR_Z_HEIGHT_MULTIPLIERS[static_cast<uint16_t>(multiplier_)];
+}
+
+//! Adjust the Z height.
+//! @param offset Offset for the adjustment.
+void SensorZHeight::adjust_height(double offset) {
+  if(!ELAPSED(millis(), last_click_time_))
+    return;
+  last_click_time_ = millis();
+  ExtUI::setAxisPosition_mm(ExtUI::getAxisPosition_mm(ExtUI::Z) + offset, ExtUI::Z, FEEDRATE_Z);
+  send_data();
+}
+
+//! Send the current data (i.e. multiplier) to the LCD panel.
+void SensorZHeight::send_data() const {
+  WriteRamRequest{Variable::Value0}.write_word(static_cast<uint16_t>(multiplier_));
 }
 
 #endif
+
+}

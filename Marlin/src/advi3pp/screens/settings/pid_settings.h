@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,37 @@
 #pragma once
 
 #include "../../lib/ADVstd/array.h"
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::PidSettings {
-  bool handle_command(uint16_t key_code, uint16_t arg);
+namespace ADVi3pp {
+
+
+struct PidSettings: Screen<PidSettings> {
+  static constexpr Page PAGE = Page::PidSettings;
+  static constexpr Action ACTION = Action::PidSettings;
+
+private:
+  bool on_dispatch(KeyValue key_value);
+  bool on_enter();
+  void on_save_command();
+  void on_back_command();
+
+  void save_bed_pid() const;
+  void hotend_command();
+  void save_hotend_pid() const;
+  void bed_command();
+  void previous_command();
+  void next_command();
+  void to_lcd() const;
+  void from_lcd();
+
+private:
+  TemperatureKind kind_ = TemperatureKind::Hotend;
+  uint8_t index_ = 0;
+
+  friend Parent;
+};
+
+extern PidSettings pid_settings;
+
 }

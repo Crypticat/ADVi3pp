@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,38 +19,42 @@
  */
 
 #include "../../inc/MarlinConfig.h"
+#include <Arduino.h>
 #include "../../lcd/extui/ui_api.h"
 #include "graphs.h"
 #include "dgus.h"
 
-namespace ADVi3pp::Graphs {
+namespace ADVi3pp {
 
-  inline namespace internals {
-    uint32_t next_update_graph_time_ = millis() + 1000L * 10; // Wait 10 sec before starting updating graphs;
-  }
+Graphs graphs;
 
+//! Constructor
+//! Initialize the update time
+Graphs::Graphs() {
+  next_update_graph_time_ = millis() + 1000L * 10; // Wait 10 sec before starting updating graphs
+}
 
-  //! Update the graphs (if the update delay has elapsed)
-  void update() {
-    if(!ELAPSED(millis(), next_update_graph_time_))
-      return;
+//! Update the graphs (if the update delay has elapsed)
+void Graphs::update() {
+  if(!ELAPSED(millis(), next_update_graph_time_))
+    return;
 
-    send_data();
-    next_update_graph_time_ = millis() + 500;
-  }
+  send_data();
+  next_update_graph_time_ = millis() + 500;
+}
 
-  //! Update the graphs on the LCD panel (two channels: the bed and the hotend).
-  void send_data() {
-    SuspendLogging no_logging{};
-    WriteCurveRequest{0b00000011}.write_words(
-      ExtUI::getActualTemp_celsius(ExtUI::BED),
-      ExtUI::getActualTemp_celsius(ExtUI::E0)
-    );
-  }
+//! Update the graphs on the LCD panel (two channels: the bed and the hotend).
+void Graphs::send_data() {
+  NoFrameLogging no_logging{};
+  WriteCurveRequest{0b00000011}.write_words(
+    ExtUI::getActualTemp_celsius(ExtUI::BED),
+    ExtUI::getActualTemp_celsius(ExtUI::E0)
+  );
+}
 
-  //! Clear the graphs
-  void clear() {
-    WriteRegisterRequest{Register::TrendlineClear}.write_byte(0x55);
-  }
+//! Clear the graphs
+void Graphs::clear() {
+  WriteRegisterRequest{Register::TrendlineClear}.write_byte(0x55);
+}
 
 }

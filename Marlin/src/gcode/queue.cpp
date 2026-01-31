@@ -101,7 +101,7 @@ void GCodeQueue::RingBuffer::commit_command(const bool skip_ok
   commands[index_w].skip_ok = skip_ok;
   TERN_(HAS_MULTI_SERIAL, commands[index_w].port = serial_ind);
   TERN_(POWER_LOSS_RECOVERY, recovery.commit_sdpos(index_w));
-  advance_w();
+  advance_pos(index_w, 1);
 }
 
 /**
@@ -320,7 +320,7 @@ inline int read_serial(const serial_index_t index) { return SERIAL_IMPL.read(ind
 void GCodeQueue::gcode_line_error(FSTR_P const ferr, const serial_index_t serial_ind) {
   PORT_REDIRECT(SERIAL_PORTMASK(serial_ind)); // Reply to the serial port that sent the command
   SERIAL_ERROR_START();
-  SERIAL_ECHOLN(ferr, serial_state[serial_ind.index].last_N);
+  SERIAL_ECHOLNF(ferr, serial_state[serial_ind.index].last_N);
   while (read_serial(serial_ind) != -1) { /* nada */ } // Clear out the RX buffer. Why don't use flush here ?
   flush_and_request_resend(serial_ind);
   serial_state[serial_ind.index].count = 0;
@@ -702,7 +702,7 @@ void GCodeQueue::advance() {
   #endif // HAS_MEDIA
 
   // The queue may be reset by a command handler or by code invoked by idle() within a handler
-  ring_buffer.advance_r();
+  ring_buffer.advance_pos(ring_buffer.index_r, -1);
 }
 
 #if ENABLED(BUFFER_MONITORING)

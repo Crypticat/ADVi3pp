@@ -21,7 +21,7 @@
  */
 #pragma once
 
-// @advi3++: Change the name depending on the model of the printer and the model of the sensor
+// @advi3++: Change the name depending of the model of the printer and the model of the sensor
 #if defined(ADVi3PP_54)
     #define ADVi3PP_NAME "ADVi3++MarkII"
 #elif defined(ADVi3PP_52C)
@@ -42,7 +42,7 @@
  * Release version. Leave the Marlin version or apply a custom scheme.
  */
 #ifndef SHORT_BUILD_VERSION
-  #define SHORT_BUILD_VERSION "2.1.3-beta2"
+  #define SHORT_BUILD_VERSION "2.1.2.2"
 #endif
 
 /**
@@ -50,7 +50,7 @@
  * vendor name, download location, GitHub account, etc.
  */
 #ifndef DETAILED_BUILD_VERSION
-  #define DETAILED_BUILD_VERSION SHORT_BUILD_VERSION " (" ADVi3PP_NAME " 6.0.0)"
+  #define DETAILED_BUILD_VERSION SHORT_BUILD_VERSION " (" ADVi3PP_NAME " 5.8.0)"
 #endif
 
 /**
@@ -59,7 +59,7 @@
  * version was tagged.
  */
 #ifndef STRING_DISTRIBUTION_DATE
-  #define STRING_DISTRIBUTION_DATE "2025-06-20"
+  #define STRING_DISTRIBUTION_DATE "2024-03-17"
 #endif
 
 /**
@@ -69,7 +69,7 @@
  * to alert users to major changes.
  */
 
-#define MARLIN_HEX_VERSION 02010300
+#define MARLIN_HEX_VERSION 02010202
 #ifndef REQUIRED_CONFIGURATION_H_VERSION
   #define REQUIRED_CONFIGURATION_H_VERSION MARLIN_HEX_VERSION
 #endif
@@ -118,8 +118,8 @@
 #endif
 
 /**
- * Set the vendor info the serial USB interface, if changeable.
- * Currently only supported by DUE platform.
+ * Set the vendor info the serial USB interface, if changable
+ * Currently only supported by DUE platform
  */
 #ifndef USB_DEVICE_VENDOR_ID
   #define USB_DEVICE_VENDOR_ID            0x03EB /* ATMEL VID */

@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,24 +22,20 @@
 
 namespace ADVi3pp {
 
-  struct Reentrant {
-    friend struct ReentrantScope;
+struct Reentrant {
+  friend class ReentrantScope;
 
-  private:
-    unsigned counter_ = 0;
-  };
+private:
+  unsigned counter_ = 0;
+};
 
-  struct ReentrantScope {
-    explicit ReentrantScope(Reentrant &reentrant): reentrant_{reentrant} { ++reentrant.counter_; };
-    ~ReentrantScope() { --reentrant_.counter_; }
-    [[nodiscard]] bool reentrant() const;
+struct ReentrantScope {
+  ReentrantScope(Reentrant &reentrant): reentrant_{reentrant} { ++reentrant.counter_; };
+  ~ReentrantScope() { --reentrant_.counter_; }
+  bool reentrant();
 
-  private:
-    Reentrant &reentrant_;
-  };
-
-  inline bool ReentrantScope::reentrant() const {
-    return reentrant_.counter_ > 1;
-  }
+private:
+  Reentrant &reentrant_;
+};
 
 }

@@ -28,7 +28,7 @@
 #include "../../module/motion.h"
 #include "../../module/probe.h"
 
-#if HAS_BLTOUCH_HS_MODE
+#ifdef BLTOUCH_HS_MODE
   #include "../../feature/bltouch.h"
 #endif
 
@@ -39,49 +39,46 @@
  *  H       Report the current BLTouch HS mode state and exit
  *  S<bool> Set High Speed (HS) Mode and exit without deploy
  *
- *  R<bool> Remain in place after deploying (and before activating) the probe
- *
  * @advi3++ With BLTOUCH_SW_MODE:
  *  I       Report the current BLTouch Touch Switch mode state and exit
  *  T<bool> Set Touch Switch (Touch SW) Mode and exit without deploy
  */
 void GcodeSuite::M401() {
-  #if HAS_BLTOUCH_HS_MODE
-    const bool seenH = parser.seen_test('H'),
-               seenS = parser.seen('S'),
-               seenI = parser.seen_test('I'), // @advi3++
-               seenT = parser.seen_test('T'); // @advi3++
-    if (seenH || seenS) {
+  const bool seenH = parser.seen_test('H'),
+             seenS = parser.seen('S'),
+             seenI = parser.seen_test('I'), // @advi3++
+             seenT = parser.seen_test('T'); // @advi3++
+  if (seenH || seenS) {
+    #ifdef BLTOUCH_HS_MODE
       if (seenS) bltouch.high_speed_mode = parser.value_bool();
       SERIAL_ECHO_START();
       SERIAL_ECHOPGM("BLTouch HS mode ");
       serialprintln_onoff(bltouch.high_speed_mode);
-      return;
-    }
-  #endif
-  
-  // @advi3++
-  #ifdef BLTOUCH_ALLOW_SW_MODE
-  if (seenI || seenT) {
-      if (seenT) bltouch.sw_mode = parser.value_bool();
-      SERIAL_ECHO_START();
-      SERIAL_ECHOPGM("BLTouch Touch SW mode ");
-      serialprintln_onoff(bltouch.sw_mode);
+    #endif
     return;
   }
-  #endif
 
-  probe.deploy(parser.boolval('R'));
+  // @advi3++
+  if (seenI || seenT) {
+    #ifdef BLTOUCH_ALLOW_SW_MODE
+      if (seenT) bltouch.touch_sw_mode = parser.value_bool();
+      SERIAL_ECHO_START();
+      SERIAL_ECHOPGM("BLTouch Touch SW mode ");
+      serialprintln_onoff(bltouch.touch_sw_mode);
+    #endif
+    return;
+  }
+
+  probe.deploy();
   TERN_(PROBE_TARE, probe.tare());
   report_current_position();
 }
 
 /**
  * M402: Deactivate and stow the Z probe
- *  R<bool> Remain in place after stowing (and before deactivating) the probe
  */
 void GcodeSuite::M402() {
-  probe.stow(parser.boolval('R'));
+  probe.stow();
   #ifdef Z_AFTER_PROBING
     do_z_clearance(Z_AFTER_PROBING);
   #endif

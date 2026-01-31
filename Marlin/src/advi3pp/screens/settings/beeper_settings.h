@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,10 +20,36 @@
 
 #pragma once
 
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 #include "../../core/buzzer.h"
 
-namespace ADVi3pp::BeeperSettings {
-  bool handle_command(uint16_t key_code);
-  void handle_duration_command(uint16_t duration);
+namespace ADVi3pp {
+
+//! Beeper Setting Page
+struct BeeperSettings: Screen<BeeperSettings> {
+  static constexpr Page PAGE = Page::BuzzerSettings;
+  static constexpr Action ACTION = Action::BuzzerSettings;
+
+  void duration_command(uint16_t duration);
+
+private:
+  bool on_dispatch(KeyValue key_value);
+  bool on_enter();
+  void on_save_command();
+
+  void send_values(bool on_action, bool on_press, uint8_t duration) const;
+  bool get_values(bool &on_action, bool &on_press, uint8_t &duration);
+
+  void on_action_command();
+  void on_press_command();
+
+  friend Parent;
+
+private:
+  bool buzz_on_action_ = true;
+  bool buzz_on_press_ = false;
+};
+
+extern BeeperSettings beeper_settings;
+
 }

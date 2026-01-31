@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,128 +19,107 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-#include "../../../lcd/extui/ui_api.h"
 #include "preheat.h"
 #include "../../core/core.h"
 #include "../../core/dgus.h"
 #include "../../core/status.h"
-#include "../../core/pool.h"
+#include "../print/temperatures.h"
 
-namespace ADVi3pp::Preheat {
+namespace ADVi3pp {
 
-  inline namespace internals {
-    constexpr uint16_t KEY_CODE_PREVIOUS = 1;
-    constexpr uint16_t KEY_CODE_NEXT = 2;
-    constexpr uint16_t KEY_CODE_COOLDOWN = 3;
-    constexpr Variable VAR_TEMP = Variable::Value0;
+Preheat preheat;
 
-    struct Data {;
-      size_t index_ = 0;
-    };
-
-    inline Data& pool() { return Pool::get<Data>(Page::Preheat); }
-
-    void show_command();
-    void save_command();
-    void back_command();
-    void previous_command();
-    void next_command();
-    void cooldown_command();
-
-    void send_presets();
-    void retrieve_presets();
-  }
-
-  //! Handle Preheat actions.
-  //! @param key_value    Sub-action to handle
-  //! @return             True if the action was handled
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: show_command(); break;
-      case KEY_CODE_BACK: back_command(); break;
-      case KEY_CODE_SAVE: save_command(); break;
-      case KEY_CODE_PREVIOUS: previous_command(); break;
-      case KEY_CODE_NEXT: next_command(); break;
-      case KEY_CODE_COOLDOWN: cooldown_command(); break;
-      default: return false;
-    }
+//! Handle Preheat actions.
+//! @param key_value    Sub-action to handle
+//! @return             True if the action was handled
+bool Preheat::on_dispatch(KeyValue key_value) {
+  if(Parent::on_dispatch(key_value))
     return true;
+
+  switch(key_value) {
+    case KeyValue::PresetPrevious:  previous_command(); break;
+    case KeyValue::PresetNext:      next_command(); break;
+    case KeyValue::Cooldown:        cooldown_command(); break;
+    default:                        return false;
   }
 
-  inline namespace internals {
+  return true;
+}
 
-    void show_command() {
-      if(!Core::check_not_busy()) return;
-      Pool::reset<Data>(Page::Preheat);
-      Status::reset();
-      send_presets();
-      Pages::show(Page::Preheat);
-    }
+//! Send the presets t the LCD Panel
+void Preheat::send_presets() {
+  WriteRamRequest{Variable::Value0}.write_words(
+    ExtUI::getMaterialPresetHotendTemp_celsius(index_),
+    ExtUI::getMaterialPresetBedTemp_celsius(index_),
+    ExtUI::getMaterialPresetFanSpeed_percent(index_)
+  );
 
-    void back_command() {
-      Pages::back(Pages::BACK_OPTIONS::NONE);
-    }
+  ADVString<8> preset;
+  preset << index_ + 1 << F(" / ") << NB_PRESETS;
+  WriteRamRequest{Variable::ShortText0}.write_text(preset);
+}
 
-    //! Send the presets t the LCD Panel
-    void send_presets() {
-      WriteRamRequest{VAR_TEMP}.write_words(
-        ExtUI::getMaterialPresetHotendTemp_celsius(pool().index_),
-        ExtUI::getMaterialPresetBedTemp_celsius(pool().index_),
-        ExtUI::getMaterialPresetFanSpeed_percent(pool().index_)
-      );
-
-      ADVString<3> preset;
-      preset << pool().index_ + 1 << F("/") << PREHEAT_COUNT;
-      WriteRamRequest{Variable::ShortText0}.write_text(preset.get(), SHORT_TEXT_LENGTH);
-    }
-
-    //! Retrieve presets values from the LCD Panel
-    void retrieve_presets() {
-      ReadRam frame{VAR_TEMP};
-      if(!frame.send_receive(3)) return;
-
-      auto hotend = frame.read_int();
-      auto bed = frame.read_int();
-      auto fan = frame.read_uint();
-
-      ExtUI::setMaterialPreset(pool().index_, hotend, bed, fan);
-    }
-
-    //! Handle Previous command
-    void previous_command() {
-      retrieve_presets();
-      pool().index_ = pool().index_ > 0 ? pool().index_ - 1 : PREHEAT_COUNT - 1;
-      send_presets();
-    }
-
-    //! Handle Next command
-    void next_command() {
-      retrieve_presets();
-      pool().index_ = pool().index_ < PREHEAT_COUNT - 1 ? pool().index_ + 1 : 0;
-      send_presets();
-    }
-
-    //! Handles the Save (Continue) command
-    void save_command() {
-      retrieve_presets();
-
-      ExtUI::setTargetTemp_celsius(ExtUI::getMaterialPresetHotendTemp_celsius(pool().index_), ExtUI::H0, true);
-      ExtUI::setTargetTemp_celsius(ExtUI::getMaterialPresetBedTemp_celsius(pool().index_), ExtUI::BED, true);
-      ExtUI::setTargetFan_percent(ExtUI::getMaterialPresetFanSpeed_percent(pool().index_), ExtUI::FAN0);
-
-      Status::set(GET_TEXT_F(ADVI3PP_MSG_PREHEAT), Status::STATUS_OPTIONS::RESET);
-      Pages::save(Pages::SAVE_OPTIONS::SETTINGS, Pages::BACK_OPTIONS::NONE);
-    }
-
-    //! Cooldown the bed and the nozzle, turn off the fan
-    void cooldown_command() {
-      // If printing, do nothing
-      if(Core::is_printing()) return;
-      ExtUI::setTargetTemp_celsius(0, ExtUI::BED);
-      ExtUI::setTargetTemp_celsius(0, ExtUI::H0);
-      ExtUI::setTargetFan_percent(0, ExtUI::FAN0);
-      Status::set(GET_TEXT_F(MSG_COOLDOWN), Status::STATUS_OPTIONS::RESET);
-    }
-
+//! Retrieve presets values from the LCD Panel
+void Preheat::retrieve_presets() {
+  ReadRam frame{Variable::Value0};
+  if(!frame.send_receive(3)) {
+    Log::error() << F("Error receiving presets") << Log::endl();
+    return;
   }
+
+  uint16_t hotend = frame.read_word();
+  uint16_t bed = frame.read_word();
+  uint16_t fan = frame.read_word();
+
+  ExtUI::setMaterialPreset(index_, hotend, bed, fan);
+}
+
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool Preheat::on_enter() {
+  send_presets();
+  return true;
+}
+
+//! Handle Previous command
+void Preheat::previous_command() {
+  if(index_ <= 0)
+    return;
+  retrieve_presets();
+  --index_;
+  send_presets();
+}
+
+//! Handle Next command
+void Preheat::next_command() {
+  if(index_ >= NB_PRESETS - 1)
+      return;
+  retrieve_presets();
+  ++index_;
+  send_presets();
+}
+
+//! Handles the Save (Continue) command
+void Preheat::on_save_command() {
+  retrieve_presets();
+
+  ExtUI::setTargetTemp_celsius(ExtUI::getMaterialPresetHotendTemp_celsius(index_), ExtUI::E0, true);
+  ExtUI::setTargetTemp_celsius(ExtUI::getMaterialPresetBedTemp_celsius(index_), ExtUI::BED, true);
+  ExtUI::setTargetFan_percent(ExtUI::getMaterialPresetFanSpeed_percent(index_), ExtUI::FAN0);
+
+  settings.save();
+  status.set(F("Preheat..."));
+  temperatures.show();
+}
+
+//! Cooldown the bed and the nozzle, turn off the fan
+void Preheat::cooldown_command() {
+  // If printing, do nothing
+  if(ExtUI::isPrinting()) return;
+  ExtUI::setTargetTemp_celsius(0, ExtUI::BED);
+  ExtUI::setTargetTemp_celsius(0, ExtUI::E0);
+  ExtUI::setTargetFan_percent(0, ExtUI::FAN0);
+  status.set(F("Cool down..."));
+}
+
 }

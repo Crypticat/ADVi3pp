@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,36 @@
 
 #pragma once
 
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::ExtruderTuning {
-  bool handle_command(uint16_t key_code);
+namespace ADVi3pp {
+
+//! Extruder Tuning Page
+struct ExtruderTuning: Screen<ExtruderTuning> {
+  static constexpr Page PAGE = Page::ExtruderTuning;
+  static constexpr Action ACTION = Action::ExtruderTuning;
+
+private:
+  bool on_dispatch(KeyValue value);
+  bool on_enter();
+  void on_back_command();
+  void on_save_command();
+
+  void start_command();
+  void settings_command();
+  void send_data();
+  void heating();
+  bool cancel_heating();
+  void extrude();
+  void extruding();
+  bool cancel_extrude();
+
+private:
+  float extruded_ = 0.0;
+  float previous_z_ = 0.0;
+  friend Parent;
+};
+
+extern ExtruderTuning extruder_tuning;
+
 }

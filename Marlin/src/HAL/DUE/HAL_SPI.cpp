@@ -42,7 +42,7 @@
 // Public functions
 // ------------------------
 
-#if ANY(SOFTWARE_SPI, FORCE_SOFT_SPI)
+#if ANY(DUE_SOFTWARE_SPI, FORCE_SOFT_SPI)
 
   // ------------------------
   // Software SPI
@@ -600,8 +600,9 @@
       OUT_WRITE(SPI_EEPROM1_CS_PIN, HIGH);
       OUT_WRITE(SPI_EEPROM2_CS_PIN, HIGH);
       OUT_WRITE(SPI_FLASH_CS_PIN, HIGH);
-      OUT_WRITE(SD_SS_PIN, HIGH);
-      WRITE(SD_SS_PIN, LOW);
+      WRITE(SD_SS_PIN, HIGH);
+
+      OUT_WRITE(SDSS, LOW);
 
       PIO_Configure(
         g_APinDescription[SPI_PIN].pPort,
@@ -766,7 +767,7 @@
 
       // Disable PIO on A26 and A27
       REG_PIOA_PDR = 0x0C000000;
-      OUT_WRITE(SD_SS_PIN, HIGH);
+      OUT_WRITE(SDSS, HIGH);
 
       // Reset SPI0 (from sam lib)
       SPI0->SPI_CR = SPI_CR_SPIDIS;

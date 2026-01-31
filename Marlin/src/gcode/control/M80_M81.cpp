@@ -34,11 +34,7 @@
   #include "../../feature/power.h"
 #endif
 
-#if ENABLED(POWER_LOSS_RECOVERY)
-  #include "../../feature/powerloss.h"
-#endif
-
-#if ANY(HAS_SUICIDE, CONFIGURABLE_MACHINE_NAME)
+#if HAS_SUICIDE
   #include "../../MarlinCore.h"
 #endif
 
@@ -49,41 +45,12 @@
    * M80 S : Report the current state and exit
    */
   void GcodeSuite::M80() {
-    // @advi3++
-    bool poweron = true;
 
     // S: Report the current power supply state and exit
     if (parser.seen('S')) {
-      // @advi3++ if no value, return the status (backward compatibility)
-      if(!parser.has_value()) {
-        M80_report();
-        SERIAL_ECHO(powerManager.psu_on ? F("PS:1\n") : F("PS:0\n"));
-        return;
-      }
-      // Enabled / disabled
-      powerManager.enable(parser.value_bool());
-      poweron = false;
+      SERIAL_ECHOF(powerManager.psu_on ? F("PS:1\n") : F("PS:0\n"));
+      return;
     }
-
-    // Inverted
-    if(parser.seen('I')) {
-      powerManager.invert(parser.value_bool());
-      poweron = false;
-    }
-
-    // Timeout
-    if(parser.seen('D')) {
-      powerManager.set_timeout(parser.value_ushort());
-      poweron = false;
-    }
-
-    // Cooldown temperature
-    if(parser.seen('T')) {
-      powerManager.set_temperature(parser.value_ushort());
-      poweron = false;
-    }
-
-    if(!poweron) return;
 
     powerManager.power_on();
 
@@ -117,15 +84,9 @@ void GcodeSuite::M81() {
     ZERO(thermalManager.saved_fan_speed);
   #endif
 
-  TERN_(POWER_LOSS_RECOVERY, recovery.purge()); // Clear PLR on intentional shutdown
-
   safe_delay(1000); // Wait 1 second before switching off
 
-  #if ENABLED(CONFIGURABLE_MACHINE_NAME)
-    ui.set_status(&MString<30>(&machine_name, ' ', F(STR_OFF), '.'));
-  #else
-    LCD_MESSAGE_F(MACHINE_NAME " " STR_OFF ".");
-  #endif
+  LCD_MESSAGE_F(MACHINE_NAME " " STR_OFF ".");
 
   bool delayed_power_off = false;
 
@@ -151,21 +112,9 @@ void GcodeSuite::M81() {
     return;
   }
 
-  #if ENABLED(PSU_CONTROL)
-    powerManager.power_off_soon();
-  #elif HAS_SUICIDE
+  #if HAS_SUICIDE
     suicide();
+  #elif ENABLED(PSU_CONTROL)
+    powerManager.power_off_soon();
   #endif
 }
-
-#if ENABLED(PSU_CONTROL)
-void GcodeSuite::M80_report(const bool forReplay/*=true*/) {
-  // @advi3++
-  SERIAL_ECHOPGM("  M80");
-  SERIAL_ECHOPGM(" S", AS_DIGIT(powerManager.enabled));
-  SERIAL_ECHOPGM(" I", AS_DIGIT(powerManager.inverted));
-  SERIAL_ECHOPGM(" D", powerManager.timeout);
-  SERIAL_ECHOPGM(" T", powerManager.temperature);
-  SERIAL_EOL();
-}
-#endif

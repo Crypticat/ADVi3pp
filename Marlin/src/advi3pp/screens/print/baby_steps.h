@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,12 +19,37 @@
  */
 
 #pragma once
-#if ENABLED(BABYSTEPPING)
 
-#include "../../core/pages.h"
+#include "../../core/screen.h"
 
-namespace ADVi3pp::BabySteps {
-  bool handle_command(uint16_t key_code);
+namespace ADVi3pp {
+
+//! Print Settings Page
+struct BabySteps: Screen<BabySteps> {
+  static constexpr Page PAGE = Page::BabySteps;
+  static constexpr Action ACTION = Action::BabySteps;
+
+  void baby_minus_command();
+  void baby_plus_command();
+
+  enum class Multiplier: uint8_t { M1, M2, M3 };
+
+private:
+  bool on_dispatch(KeyValue value);
+  bool on_enter();
+  void on_back_command();
+
+  void send_multiplier() const;
+  void send_z_offset();
+  int get_multiplier_value() const;
+
+private:
+  Multiplier multiplier_ = Multiplier::M1;
+  bool save_ = false;
+
+  friend Parent;
+};
+
+extern BabySteps baby_steps;
+
 }
-
-#endif

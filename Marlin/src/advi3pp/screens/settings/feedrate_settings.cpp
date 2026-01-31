@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,62 +19,50 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-#include "../../../lcd/extui/ui_api.h"
-#include "../../core/dgus.h"
 #include "feedrate_settings.h"
+#include "../../core/dgus.h"
 
-namespace ADVi3pp::FeedrateSettings {
+namespace ADVi3pp {
 
-  inline namespace internals {
-    void show_command();
-    void save_command();
+FeedrateSettings feedrates_settings;
+
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool FeedrateSettings::on_enter() {
+  WriteRamRequest{Variable::Value0}.write_words(
+    ExtUI::getAxisMaxFeedrate_mm_s(ExtUI::X),
+    ExtUI::getAxisMaxFeedrate_mm_s(ExtUI::Y),
+    ExtUI::getAxisMaxFeedrate_mm_s(ExtUI::Z),
+    ExtUI::getAxisMaxFeedrate_mm_s(ExtUI::E0),
+    ExtUI::getMinFeedrate_mm_s(),
+    ExtUI::getMinTravelFeedrate_mm_s()
+  );
+  return true;
+}
+
+//! Save the Feedrate settings
+void FeedrateSettings::on_save_command() {
+  ReadRam response{Variable::Value0};
+  if(!response.send_receive(6)) {
+    Log::error() << F("Receiving Frame (Feedrate Settings)") << Log::endl();
+    return;
   }
 
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: show_command(); break;
-      case KEY_CODE_BACK: Pages::back(Pages::BACK_OPTIONS::NONE); break;
-      case KEY_CODE_SAVE: save_command(); break;
-      default: return false;
-    }
-    return true;
-  }
+  uint16_t x = response.read_word();
+  uint16_t y = response.read_word();
+  uint16_t z = response.read_word();
+  uint16_t e = response.read_word();
+  uint16_t min = response.read_word();
+  uint16_t travel = response.read_word();
 
-  inline namespace internals {
+  ExtUI::setAxisMaxFeedrate_mm_s(static_cast<float>(x), ExtUI::X);
+  ExtUI::setAxisMaxFeedrate_mm_s(static_cast<float>(y), ExtUI::Y);
+  ExtUI::setAxisMaxFeedrate_mm_s(static_cast<float>(z), ExtUI::Z);
+  ExtUI::setAxisMaxFeedrate_mm_s(static_cast<float>(e), ExtUI::E0);
+  ExtUI::setMinFeedrate_mm_s(static_cast<float>(min));
+  ExtUI::setMinTravelFeedrate_mm_s(static_cast<float>(travel));
 
-    void show_command() {
-      WriteRamRequest{Variable::Value0}.write_words(
-          ExtUI::getAxisMaxFeedrate_mm_s(ExtUI::X),
-          ExtUI::getAxisMaxFeedrate_mm_s(ExtUI::Y),
-          ExtUI::getAxisMaxFeedrate_mm_s(ExtUI::Z),
-          ExtUI::getAxisMaxFeedrate_mm_s(ExtUI::E0),
-          ExtUI::getMinFeedrate_mm_s(),
-          ExtUI::getMinTravelFeedrate_mm_s()
-      );
-      Pages::show(Page::FeedrateSettings);
-    }
+  Parent::on_save_command();
+}
 
-    //! Save the Feedrate settings
-    void save_command() {
-      ReadRam response{Variable::Value0};
-      if(!response.send_receive(6)) return;
-
-      auto x = response.read_uint();
-      auto y = response.read_uint();
-      auto z = response.read_uint();
-      auto e = response.read_uint();
-      auto min = response.read_uint();
-      auto travel = response.read_uint();
-
-      ExtUI::setAxisMaxFeedrate_mm_s(x, ExtUI::X);
-      ExtUI::setAxisMaxFeedrate_mm_s(y, ExtUI::Y);
-      ExtUI::setAxisMaxFeedrate_mm_s(z, ExtUI::Z);
-      ExtUI::setAxisMaxFeedrate_mm_s(e, ExtUI::E0);
-      ExtUI::setMinFeedrate_mm_s(min);
-      ExtUI::setMinTravelFeedrate_mm_s(travel);
-
-      Pages::save(Pages::SAVE_OPTIONS::SETTINGS | Pages::SAVE_OPTIONS::MESSAGE, Pages::BACK_OPTIONS::NONE);
-    }
-
-  }
 }

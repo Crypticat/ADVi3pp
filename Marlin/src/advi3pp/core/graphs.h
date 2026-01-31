@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,20 @@
 
 #pragma once
 
-namespace ADVi3pp::Graphs {
+namespace ADVi3pp {
+
+//! Graphs
+struct Graphs {
+  Graphs();
+
   void clear();
   void send_data();
   void update();
+
+private:
+  uint32_t next_update_graph_time_;
+};
+
+extern Graphs graphs;
+
 }

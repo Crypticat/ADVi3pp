@@ -22,39 +22,33 @@
 
 #include "../../core/millis_t.h"
 #include "../lib/ADVstd/ADVcallback.h"
-#include "callback.h"
 
 namespace ADVi3pp {
-  constexpr unsigned DEFAULT_TASK_DELAY = 100; // ms
 
-  //! Measure elapsed time, D = delay
-  struct Elapse {
-    unsigned delay_ = DEFAULT_TASK_DELAY;
-    millis_t next_execute_time_ = 0;
+using Callback = adv::Callback<void(*)()>;
 
-    explicit Elapse(unsigned delay);
+//! Task
+struct Task {
+  enum class Activation { MULTIPLE, ONE_TIME };
+  static const unsigned DEFAULT_DELAY = 100; // ms
 
-    bool is_elapsed(bool force = false);
-    bool is_pending(bool force = false);
-    void reset(unsigned delay = 0);
-  };
+  Task() = default;
+  explicit Task(const Callback& callback, unsigned int delay = DEFAULT_DELAY, Activation activation = Activation::MULTIPLE);
 
-  //! Task
-  struct Task {
-    explicit Task(unsigned delay = DEFAULT_TASK_DELAY);
+  void set(const Callback& callback, unsigned int delay = DEFAULT_DELAY, Activation activation = Activation::MULTIPLE);
+  void clear();
+  bool execute(bool force_execute = false);
 
-    void set(CALLBACK_RESULT (*callback)(), unsigned delay = DEFAULT_TASK_DELAY);
-    void rearm();
-    void clear();
-    bool execute(bool force_execute = false);
+private:
+  void set_next_execute_time();
 
-  private:
-    Elapse elapse_;
-    CALLBACK_RESULT (*callback_)() {nullptr};
-  };
+private:
+  unsigned int delay_ = DEFAULT_DELAY;
+  Activation activation_ = Activation::MULTIPLE;
+  millis_t next_execute_time_ = 0;
+  Callback callback_;
+};
 
-  extern Task background_task; // Primary task
-  extern Task status_task; // To update status task
-  extern Task wait_task; // For all wait screens
+extern Task background_task;
+
 }
-

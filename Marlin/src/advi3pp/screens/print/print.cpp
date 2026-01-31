@@ -1,7 +1,7 @@
 /**
  * ADVi3++ Firmware For Wanhao Duplicator i3 Plus (based on Marlin 2)
  *
- * Copyright (C) 2017-2025 Sebastien Andrivet [https://github.com/andrivet/]
+ * Copyright (C) 2017-2022 Sebastien Andrivet [https://github.com/andrivet/]
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,78 +19,84 @@
  */
 
 #include "../../../inc/MarlinConfig.h"
-#include "../../../lcd/extui/ui_api.h"
+#include "print.h"
 #include "../../core/core.h"
 #include "../../core/status.h"
-#include "../common/wait.h"
-#include "print.h"
+#include "../../core/wait.h"
 
 
-namespace ADVi3pp::Print {
-  inline namespace internals {
-    constexpr uint16_t KEY_CODE_STOP = 1;
-    constexpr uint16_t KEY_CODE_PAUSE = 2;
-    constexpr uint16_t KEY_CODE_ADVANCED = 3;
+namespace ADVi3pp {
 
-    void show_command();
-    void back_command();
-    void stop_command();
-    void pause_command();
-    void advanced_pause_command();
-  }
+Print print;
 
-  bool handle_command(uint16_t key_code) {
-    switch(key_code) {
-      case KEY_CODE_SHOW: show_command(); break;
-      case KEY_CODE_BACK: back_command(); break;
-      case KEY_CODE_STOP: stop_command(); break;
-      case KEY_CODE_PAUSE: pause_command(); break;
-      case KEY_CODE_ADVANCED: advanced_pause_command(); break;
-      default: return false;
-    }
+//! Handle print commands.
+//! @param key_value    The sub-action to handle
+//! @return             True if the action was handled
+bool Print::on_dispatch(KeyValue value) {
+  if(Parent::on_dispatch(value))
     return true;
+
+  switch(value) {
+    case KeyValue::PrintStop:           stop_command(); break;
+    case KeyValue::PrintPause:          pause_resume_command(); break;
+    case KeyValue::PrintAdvancedPause:  advanced_pause_command(); break;
+    default:                            return false;
   }
 
-  inline namespace internals {
+  return true;
+}
 
-    void show_command() {
-      Pages::clear_temporaries(false);
-      Core::send_lcd_zero();
-      Pages::show(Page::Print);
-    }
+//! Prepare the page before being displayed and return the right Page value
+//! @return The index of the page to display
+bool Print::on_enter() {
+#ifdef ADVi3PP_PROBE
+  if(!ExtUI::getLevelingActive())
+    status.set(F("WARNING: Bed leveling not active."));
+#endif
+  return true;
+}
 
-    void back_command() {
-      Pages::back(Pages::BACK_OPTIONS::NONE);
-    }
+//! Stop printing
+void Print::stop_command() {
+  if(!ExtUI::isPrinting()) return;
 
-    //! Stop printing
-    void stop_command() {
-      if(!Core::is_printing()) return;
-      Wait::wait_back_continue(GET_TEXT_F(ADVI3PP_TITLE_CONFIRM), GET_TEXT_F(ADVI3PP_MSG_ABORT_PRINT), [] (CALLBACK_SOURCE src) -> void {
-        if(src == CALLBACK_SOURCE::BACK) { // Cancel abort print
-          Status::set(GET_TEXT_F(ADVI3PP_MSG_PRINT_CONTINUE), Status::STATUS_OPTIONS::RESET);
-          return;
-        }
+  wait.wait_back_continue(F("Abort printing?"),
+  WaitCallback{this, &Print::cancel_abort_print}, WaitCallback{this, &Print::abort_print});
+}
 
-        Pages::clear_temporaries();
-        ExtUI::stopPrint();
-        Wait::not_busy();
-      });
-    }
+bool Print::cancel_abort_print() {
+  status.set(F("Continue printing"));
+  return true;
+}
 
-    //! Pause printing
-    void pause_command() {
-      if(!Core::is_printing() || Core::is_print_paused()) return;
-      Wait::wait(GET_TEXT_F(MSG_PAUSE_PRINT));
-      ExtUI::pausePrint();
-    }
+bool Print::abort_print() {
+  pages.clear_temporaries();
+  ExtUI::stopPrint();
+  return false;
+}
 
-    //! Advanced Pause for filament change
-    void advanced_pause_command() {
-      if(!Core::is_printing()) return;
-      Wait::wait(GET_TEXT_F(MSG_PAUSING));
-      Core::inject_commands(F("M600"));
-    }
+//! Pause printing
+void Print::pause_resume_command() {
+  if(!ExtUI::isPrinting())
+      return;
 
+  if(ExtUI::isPrintingPaused()) {
+    wait.wait(F("Resume printing..."));
+    ExtUI::resumePrint();
   }
+  else{
+    wait.wait(F("Pause printing..."));
+    ExtUI::pausePrint();
+  }
+}
+
+//! Advanced Pause for filament change
+void Print::advanced_pause_command() {
+  if(!ExtUI::isPrinting())
+    return;
+
+  wait.wait(F("Pausing..."));
+  core.inject_commands(F("M600"));
+}
+
 }

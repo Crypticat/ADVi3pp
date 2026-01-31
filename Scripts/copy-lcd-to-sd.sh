@@ -17,16 +17,9 @@ ret=$?; if [[ $ret != 0 ]]; then exit $ret; fi
 dgus="$( cd "${scripts}/../LCD-Panel/DGUS-root" && pwd )"
 ret=$?; if [[ $ret != 0 ]]; then exit $ret; fi
 
-echo "Disable Spotlight..."
-sudo mdutil -i off ${volume}
 echo "Clean the microSD..."
 sudo rm -Rf "${volume}/DWIN_SET/"*
 echo "Copy files..."
-rsync -av --exclude='.*' --exclude='Thumbs.db' "${dgus}/DWIN_SET/" "${volume}/DWIN_SET/"
-echo "Cleaning Apple Dot files..."
-dot_clean "${volume}/DWIN_SET/"
-echo "Ejecting..."
-while true; do
-  sleep 2
-  if diskutil eject "${volume}"; then break; else echo "Retry.."; fi
-done
+cp -R "${dgus}/DWIN_SET/" "${volume}/DWIN_SET/"
+sleep 2
+diskutil eject "${volume}"
