@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 : '
 Convert the PNG images into proper bitmaps for the LCD Panel (BMP3).
 Must be called each time the images are modified.
@@ -42,11 +42,11 @@ function copy_images() {
     do
       name=$(basename "${file}")
       if [[ "${name}" == "DWIN_SET-"* ]]; then
-        magick "${file}" -format png -background black -flatten "${png}/DWIN_SET/${name#DWIN_SET-}"
+        convert "${file}" -format png -background black -flatten "${png}/DWIN_SET/${name#DWIN_SET-}"
       elif [[ "${name}" == "Widget-"* ]]; then
-        magick "${file}" -format png -background black -flatten "${png}/Controls/${name#Widget-}"
+        convert "${file}" -format png -background black -flatten "${png}/Controls/${name#Widget-}"
       elif [[ "${name}" == "Screenshots-"* ]]; then
-        magick "${file}" -format png -background black -flatten "${png}/Screenshots/${name#Screenshots-}"
+        convert "${file}" -format png -background black -flatten "${png}/Screenshots/${name#Screenshots-}"
       elif [[ "${name}" == "Image-"* ]]; then
         cp "${file}" "${png}/Images/${name#Image-}"
       else
@@ -57,32 +57,41 @@ function copy_images() {
 
 function convert_images() {
     echo "Convert images from $1 to 24 bit BMP and copy them into $2..."
-    for f in "$1/"*.png ; do
+    shopt -s nullglob
+    local files=("$1/"*.png)
+    shopt -u nullglob
+    if [[ ${#files[@]} -eq 0 ]]; then
+        echo "  No PNG files found in $1, skipping."
+        return 0
+    fi
+    for f in "${files[@]}" ; do
         filename=$(basename "$f")
         name="${filename%.*}"
-        magick "$f" -type truecolor "BMP3:$2/${name}.bmp"
+        convert "$f" -type truecolor "BMP3:$2/${name}.bmp"
         ret=$?; if [[ $ret != 0 ]]; then exit $ret; fi
     done
 }
 
 if ! $quiet ; then
-  if read -q "answer?Clean Export? "; then
-    print "\n"
+  read -p "Clean Export? [y/N] " answer
+  if [[ "$answer" =~ ^[Yy]$ ]]; then
+    printf "\n"
     clean_export
-    print "\nPlease, export the images."
+    printf "\nPlease, export the images.\n"
   else
     printf "\nFiles not cleaned\n"
   fi
-  if ! read -q "answer?Continue? "; then
-    printf "\nAbort."
+  read -p "Continue? [y/N] " answer
+  if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+    printf "\nAbort.\n"
     exit 1
   fi
   printf "\n"
 fi
 
 rm -rf "${png}/DWIN_SET" "${png}/Controls" "${png}/Screenshots"
-rm "${dgus}/DWIN_SET/"*.bmp
-rm "${dgus}/25_Controls/"*.bmp
+rm -f "${dgus}/DWIN_SET/"*.bmp 2>/dev/null
+rm -f "${dgus}/25_Controls/"*.bmp 2>/dev/null
 
 copy_images
 convert_images "${png}/Boot"            "${dgus}/DWIN_SET"
